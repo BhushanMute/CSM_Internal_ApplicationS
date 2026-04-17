@@ -1,0 +1,1005 @@
+﻿@page "/upload"
+@using CSMTutorial.Models
+@using CSMTutorial.Services
+@using CSMTutorial.Data.Repositories
+
+@inject IExcelService ExcelService
+@inject IEmployeeRepository EmployeeRepository
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ILogger<UploadExcel> Logger
+
+<PageTitle>Upload Excel</PageTitle>
+
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h3">
+                <i class="bi bi-cloud-upload me-2"></i>Upload Excel
+            </h1>
+            <p class="text-muted">Import employee data from Excel — auto-generates Employee Code (CSM_00001) & checks Contact Number for duplicates</p>
+        </div>
+        <div class="col-auto d-flex gap-2">
+            <button class="btn btn-outline-primary" @onclick="DownloadTemplate">
+                <i class="bi bi-download me-1"></i>Download Template
+            </button>
+            <a href="/employees" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Back to List
+            </a>
+        </div>
+    </div>
+
+    <!-- Company & Department Selection -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0">
+                <i class="bi bi-building me-2"></i>Select Company & Department
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-building me-1 text-primary"></i>Company <span class="text-danger">*</span>
+                    </label>
+                    <select class="form-select form-select-lg"
+                            @bind="selectedCompanyId"
+                            @bind:after="OnCompanyChanged"
+                            disabled="@isUploading">
+                        <option value="0">-- Select Company --</option>
+                        @foreach (var company in companies)
+                        {
+                            <option value="@company.CompanyId">@company.CompanyName</option>
+                        }
+                    </select>
+                    @if (selectedCompanyId == 0 && showValidation)
+                    {
+                        <div class="text-danger small mt-1">
+                            <i class="bi bi-exclamation-circle me-1"></i>Please select a company
+                        </div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-diagram-3 me-1 text-primary"></i>Department <span class="text-danger">*</span>
+                    </label>
+                    <select class="form-select form-select-lg"
+                            @bind="selectedDepartmentId"
+                            disabled="@(isUploading || selectedCompanyId == 0)">
+                        <option value="0">-- Select Department --</option>
+                        @foreach (var dept in departments)
+                        {
+                            <option value="@dept.DepartmentId">@dept.DepartmentName</option>
+                        }
+                    </select>
+                    @if (selectedDepartmentId == 0 && showValidation)
+                    {
+                        <div class="text-danger small mt-1">
+                            <i class="bi bi-exclamation-circle me-1"></i>Please select a department
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @if (selectedCompanyId > 0 && selectedDepartmentId > 0)
+            {
+                <div class="alert alert-success mt-3 mb-0">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    <strong>Selected:</strong>
+                    @companies.FirstOrDefault(c => c.CompanyId == selectedCompanyId)?.CompanyName
+                    → @departments.FirstOrDefault(d => d.DepartmentId == selectedDepartmentId)?.DepartmentName
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Info Banner -->
+    <div class="alert alert-info border-0 shadow-sm mb-4">
+        <div class="d-flex align-items-start">
+            <i class="bi bi-info-circle-fill fs-5 me-3 mt-1"></i>
+            <div>
+                <strong>How it works:</strong>
+                <ul class="mb-0 mt-1">
+                    <li>First select <strong>Company</strong> and <strong>Department</strong> above</li>
+                    <li>Employee Code (<code>CSM_00001</code>) is <strong>auto-generated</strong> — don't include it in the file</li>
+                    <li>If <strong>Contact Number exists</strong> in database → record will be <strong class="text-info">Updated</strong></li>
+                    <li>If <strong>Contact Number is new</strong> → record will be <strong class="text-success">Inserted</strong> with new code</li>
+                    <li>Required columns: <strong>Name, Gender, Contact Number</strong></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Zone -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-4">
+            <div class="upload-zone @(isDragging ? "dragging" : "") @(isUploading ? "uploading" : "") @(selectedCompanyId == 0 || selectedDepartmentId == 0 ? "disabled" : "")"
+                 @ondragenter="HandleDragEnter"
+                 @ondragleave="HandleDragLeave"
+                 @ondragover:preventDefault
+                 @ondrop:preventDefault>
+
+                @if (selectedCompanyId == 0 || selectedDepartmentId == 0)
+                {
+                    <div class="upload-content text-center py-5">
+                        <div class="upload-icon mb-3">
+                            <i class="bi bi-lock text-muted"></i>
+                        </div>
+                        <h5 class="text-muted">Select Company & Department First</h5>
+                        <p class="text-muted mb-0">Please select a company and department before uploading the file</p>
+                    </div>
+                }
+                else
+                {
+                    <InputFile OnChange="HandleFileSelected"
+                               accept=".xlsx,.xls"
+                               class="upload-input"
+                               id="fileInput"
+                               disabled="@isUploading" />
+
+                    <div class="upload-content text-center py-5">
+                        @if (isUploading)
+                        {
+                            <div class="upload-progress mb-3">
+                                <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                                    <span class="visually-hidden">Processing...</span>
+                                </div>
+                            </div>
+                            <h5 class="text-primary">Processing File...</h5>
+                            <p class="text-muted mb-0">Checking Contact Numbers against database...</p>
+                        }
+                        else
+                        {
+                            <div class="upload-icon mb-3">
+                                <i class="bi bi-cloud-arrow-up"></i>
+                            </div>
+                            <h5>Drag & Drop Excel File Here</h5>
+                            <p class="text-muted mb-3">or click to browse your files</p>
+                            <label for="fileInput" class="btn btn-primary btn-lg px-4">
+                                <i class="bi bi-folder2-open me-2"></i>Select File
+                            </label>
+                            <div class="mt-4">
+                                <span class="badge bg-light text-dark me-2">
+                                    <i class="bi bi-file-earmark-excel text-success me-1"></i>.xlsx
+                                </span>
+                                <span class="badge bg-light text-dark me-2">
+                                    <i class="bi bi-file-earmark-excel text-success me-1"></i>.xls
+                                </span>
+                                <span class="badge bg-light text-dark">
+                                    <i class="bi bi-hdd me-1"></i>Max 10MB
+                                </span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- Selected File Info -->
+            @if (!string.IsNullOrEmpty(selectedFileName) && !isUploading)
+            {
+                <div class="selected-file mt-3 p-3 bg-light rounded-3">
+                    <div class="d-flex align-items-center">
+                        <div class="file-icon me-3">
+                            <i class="bi bi-file-earmark-excel text-success fs-2"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <strong>@selectedFileName</strong>
+                            @if (selectedFileSize > 0)
+                            {
+                                <small class="text-muted d-block">@FormatFileSize(selectedFileSize)</small>
+                            }
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="ClearFile" title="Remove file">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Messages -->
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show shadow-sm">
+            <div class="d-flex align-items-start">
+                <i class="bi bi-exclamation-triangle-fill fs-5 me-2"></i>
+                <div class="flex-grow-1">
+                    <strong>Error</strong>
+                    <p class="mb-0 mt-1">@errorMessage</p>
+                </div>
+                <button type="button" class="btn-close" @onclick="() => errorMessage = string.Empty"></button>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show shadow-sm">
+            <div class="d-flex align-items-start">
+                <i class="bi bi-check-circle-fill fs-5 me-2"></i>
+                <div class="flex-grow-1">
+                    <strong>Success</strong>
+                    <p class="mb-0 mt-1">@successMessage</p>
+                </div>
+                <button type="button" class="btn-close" @onclick="() => successMessage = string.Empty"></button>
+            </div>
+            <div class="mt-3">
+                <a href="/employees" class="btn btn-success btn-sm">
+                    <i class="bi bi-people me-1"></i>View Employees
+                </a>
+            </div>
+        </div>
+    }
+
+    <!-- Data Preview -->
+    @if (uploadResult != null && uploadResult.Records.Any())
+    {
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <h5 class="mb-0">
+                        <i class="bi bi-table me-2"></i>Data Preview
+                        <small class="text-muted ms-2">
+                            (Company: @companies.FirstOrDefault(c => c.CompanyId == selectedCompanyId)?.CompanyName,
+                            Dept: @departments.FirstOrDefault(d => d.DepartmentId == selectedDepartmentId)?.DepartmentName)
+                        </small>
+                    </h5>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <span class="badge bg-primary fs-6">
+                            <i class="bi bi-list-ul me-1"></i>Total: @uploadResult.TotalRows
+                        </span>
+                        <span class="badge bg-success fs-6">
+                            <i class="bi bi-plus-circle me-1"></i>New: @uploadResult.NewRows
+                        </span>
+                        <span class="badge bg-info fs-6">
+                            <i class="bi bi-pencil-square me-1"></i>Update: @uploadResult.UpdateRows
+                        </span>
+                        <span class="badge bg-danger fs-6">
+                            <i class="bi bi-x-circle me-1"></i>Invalid: @uploadResult.InvalidRows
+                        </span>
+                        <span class="badge bg-warning text-dark fs-6">
+                            <i class="bi bi-exclamation-triangle me-1"></i>File Dup: @uploadResult.DuplicateRows
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter Tabs -->
+            <div class="card-body border-bottom py-2">
+                <ul class="nav nav-pills nav-fill">
+                    <li class="nav-item">
+                        <button class="nav-link @(previewFilter == "all" ? "active" : "")"
+                                @onclick="@(() => SetPreviewFilter("all"))">
+                            All (@uploadResult.TotalRows)
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link @(previewFilter == "new" ? "active" : "")"
+                                @onclick="@(() => SetPreviewFilter("new"))">
+                            <i class="bi bi-plus-circle me-1"></i>New (@uploadResult.NewRows)
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link @(previewFilter == "update" ? "active" : "")"
+                                @onclick="@(() => SetPreviewFilter("update"))">
+                            <i class="bi bi-pencil-square me-1"></i>Update (@uploadResult.UpdateRows)
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link @(previewFilter == "invalid" ? "active" : "")"
+                                @onclick="@(() => SetPreviewFilter("invalid"))">
+                            <i class="bi bi-x-circle me-1"></i>Invalid (@uploadResult.InvalidRows)
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link @(previewFilter == "duplicate" ? "active" : "")"
+                                @onclick="@(() => SetPreviewFilter("duplicate"))">
+                            <i class="bi bi-files me-1"></i>File Dup (@uploadResult.DuplicateRows)
+                        </button>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="width: 50px;">Row</th>
+                                <th style="width: 80px;">Action</th>
+                                <th>Code</th>
+                                <th>Name</th>
+                                <th>Gender</th>
+                                <th>Aadhaar</th>
+                                <th>Age</th>
+                                <th>Contact Number</th>
+                                <th>Email</th>
+                                <th>Location</th>
+                                <th>Errors / Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!GetFilteredRecords().Any())
+                            {
+                                <tr>
+                                    <td colspan="11" class="text-center py-4 text-muted">
+                                        No records match the selected filter
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var record in GetFilteredRecords().Take(100))
+                                {
+                                    <tr class="@GetRowClass(record)">
+                                        <td class="text-muted">@record.RowNumber</td>
+                                        <td>
+                                            @if (record.IsDuplicate)
+                                            {
+                                                <span class="badge bg-warning text-dark" title="@record.DuplicateReason">
+                                                    <i class="bi bi-files"></i> Dup
+                                                </span>
+                                            }
+                                            else if (!record.IsValid)
+                                            {
+                                                <span class="badge bg-danger" title="Has validation errors">
+                                                    <i class="bi bi-x-circle"></i> Error
+                                                </span>
+                                            }
+                                            else if (record.IsUpdate)
+                                            {
+                                                <span class="badge bg-info" title="Contact exists - will update @record.ExistingEmployeeCode">
+                                                    <i class="bi bi-pencil-square"></i> Update
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-success" title="New - code will be auto-generated">
+                                                    <i class="bi bi-plus-circle"></i> New
+                                                </span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (record.IsUpdate)
+                                            {
+                                                <code class="text-info" title="Existing code">@record.ExistingEmployeeCode</code>
+                                            }
+                                            else if (record.IsValid && !record.IsDuplicate)
+                                            {
+                                                <span class="badge bg-success-subtle text-success" title="Will be auto-generated">
+                                                    <i class="bi bi-magic me-1"></i>AUTO
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <strong>@record.EmployeeName</strong>
+                                        </td>
+                                        <td>
+                                            <span class="badge @GetGenderBadgeClass(record.Gender)">
+                                                @record.Gender
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <small>@(string.IsNullOrEmpty(record.AadhaarNumber) ? "-" : record.AadhaarNumber)</small>
+                                        </td>
+                                        <td>@(record.Age?.ToString() ?? "-")</td>
+                                        <td>
+                                            <code class="@(record.IsUpdate ? "text-info fw-bold" : record.IsDuplicate ? "text-danger" : "")">
+                                                @(string.IsNullOrEmpty(record.ContactNo) ? "-" : record.ContactNo)
+                                            </code>
+                                            @if (record.IsUpdate)
+                                            {
+                                                <i class="bi bi-arrow-repeat text-info ms-1" title="Exists in DB"></i>
+                                            }
+                                        </td>
+                                        <td><small>@(TruncateText(record.Email, 20) ?? "-")</small></td>
+                                        <td>@(string.IsNullOrEmpty(record.Location) ? "-" : record.Location)</td>
+                                        <td>
+                                            @if (record.ValidationErrors.Any())
+                                            {
+                                                <div class="error-list">
+                                                    @foreach (var error in record.ValidationErrors)
+                                                    {
+                                                        <small class="text-danger d-block">
+                                                            <i class="bi bi-dot"></i>@error
+                                                        </small>
+                                                    }
+                                                </div>
+                                            }
+                                            else if (record.IsUpdate)
+                                            {
+                                                <small class="text-info">
+                                                    <i class="bi bi-pencil-square me-1"></i>Will update @record.ExistingEmployeeCode
+                                                </small>
+                                            }
+                                            else
+                                            {
+                                                <small class="text-success">
+                                                    <i class="bi bi-check-circle me-1"></i>Ready (CSM_XXXXX)
+                                                </small>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (GetFilteredRecords().Count() > 100)
+                {
+                    <div class="p-3 text-center bg-light border-top">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Showing first 100 of @GetFilteredRecords().Count() records
+                    </div>
+                }
+            </div>
+
+            <!-- Import Actions -->
+            <div class="card-footer bg-white py-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <div class="mb-2">
+                            <span class="badge bg-primary me-2">
+                                <i class="bi bi-building me-1"></i>@companies.FirstOrDefault(c => c.CompanyId == selectedCompanyId)?.CompanyName
+                            </span>
+                            <span class="badge bg-secondary">
+                                <i class="bi bi-diagram-3 me-1"></i>@departments.FirstOrDefault(d => d.DepartmentId == selectedDepartmentId)?.DepartmentName
+                            </span>
+                        </div>
+                        @if (uploadResult.NewRows > 0)
+                        {
+                            <span class="text-success me-3">
+                                <i class="bi bi-plus-circle me-1"></i>
+                                <strong>@uploadResult.NewRows</strong> new (code auto-generated)
+                            </span>
+                        }
+                        @if (uploadResult.UpdateRows > 0)
+                        {
+                            <span class="text-info me-3">
+                                <i class="bi bi-pencil-square me-1"></i>
+                                <strong>@uploadResult.UpdateRows</strong> to update
+                            </span>
+                        }
+                        @if (uploadResult.InvalidRows > 0 || uploadResult.DuplicateRows > 0)
+                        {
+                            <span class="text-warning">
+                                <i class="bi bi-exclamation-circle me-1"></i>
+                                <strong>@(uploadResult.InvalidRows + uploadResult.DuplicateRows)</strong> skipped
+                            </span>
+                        }
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-secondary" @onclick="ClearFile">
+                            <i class="bi bi-x-circle me-1"></i>Cancel
+                        </button>
+                        <button class="btn btn-success btn-lg px-4"
+                                @onclick="ImportData"
+                                disabled="@(isImporting || uploadResult.ValidRows == 0)">
+                            @if (isImporting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                <span>Processing...</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-database-add me-2"></i>
+                                <span>Process @uploadResult.NewRows New + @uploadResult.UpdateRows Updates</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Instructions Card -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0">
+                <i class="bi bi-info-circle me-2"></i>Import Instructions
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-4">
+                <div class="col-md-3">
+                    <div class="d-flex">
+                        <div class="step-number bg-primary text-white rounded-circle me-3">1</div>
+                        <div>
+                            <h6>Select Company & Dept</h6>
+                            <p class="text-muted small mb-0">Choose the company and department for imported employees.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex">
+                        <div class="step-number bg-primary text-white rounded-circle me-3">2</div>
+                        <div>
+                            <h6>Download Template</h6>
+                            <p class="text-muted small mb-0">Click "Download Template" to get the Excel file.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex">
+                        <div class="step-number bg-primary text-white rounded-circle me-3">3</div>
+                        <div>
+                            <h6>Fill Data</h6>
+                            <p class="text-muted small mb-0">Add employee data. Employee Code is auto-generated.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex">
+                        <div class="step-number bg-primary text-white rounded-circle me-3">4</div>
+                        <div>
+                            <h6>Upload & Process</h6>
+                            <p class="text-muted small mb-0">New contacts get inserted, existing contacts get updated.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="my-4" />
+
+            <div class="row">
+                <div class="col-md-4">
+                    <h6 class="text-success">
+                        <i class="bi bi-check-circle me-2"></i>Required Columns
+                    </h6>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item px-0 py-2 border-0">
+                            <code class="me-2">Student Name / Employee Name</code>
+                            <small class="text-muted d-block">First name</small>
+                        </li>
+                        <li class="list-group-item px-0 py-2 border-0">
+                            <code class="me-2">Gender</code>
+                            <small class="text-muted d-block">Male / Female</small>
+                        </li>
+                        <li class="list-group-item px-0 py-2 border-0">
+                            <code class="me-2">Contact Number</code>
+                            <small class="text-muted d-block">10 digits (used for duplicate check)</small>
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-md-4">
+                    <h6 class="text-muted">
+                        <i class="bi bi-dash-circle me-2"></i>Optional Columns
+                    </h6>
+                    <ul class="list-unstyled small text-muted">
+                        <li class="mb-1"><code>Student LastName</code> / <code>Last Name</code></li>
+                        <li class="mb-1"><code>AdharNumber</code> (12 digits)</li>
+                        <li class="mb-1"><code>Address</code></li>
+                        <li class="mb-1"><code>Age</code> (16-100)</li>
+                        <li class="mb-1"><code>Email</code></li>
+                        <li class="mb-1"><code>Location</code></li>
+                        <li class="mb-1"><code>Blood Group</code></li>
+                    </ul>
+                </div>
+                <div class="col-md-4">
+                    <h6 class="text-primary">
+                        <i class="bi bi-magic me-2"></i>Auto-Generated / Selected
+                    </h6>
+                    <div class="p-3 bg-primary bg-opacity-10 rounded-3 mb-2">
+                        <p class="mb-2"><strong>Employee Code</strong></p>
+                        <div class="d-flex gap-2 mb-2">
+                            <code class="bg-white px-2 py-1 rounded">CSM_00001</code>
+                            <code class="bg-white px-2 py-1 rounded">CSM_00002</code>
+                        </div>
+                        <small class="text-muted">Automatically assigned on import</small>
+                    </div>
+
+                    <div class="p-3 bg-success bg-opacity-10 rounded-3">
+                        <p class="mb-1"><strong>From Dropdown Selection</strong></p>
+                        <small class="text-muted">
+                            <i class="bi bi-building me-1"></i>Company ID<br />
+                            <i class="bi bi-diagram-3 me-1"></i>Department ID
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .upload-zone {
+        border: 2px dashed #dee2e6;
+        border-radius: 16px;
+        transition: all 0.3s ease;
+        position: relative;
+        background: linear-gradient(145deg, #fafafa 0%, #f0f0f0 100%);
+        min-height: 280px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+        .upload-zone:hover:not(.disabled),
+        .upload-zone.dragging:not(.disabled) {
+            border-color: #0d6efd;
+            background: linear-gradient(145deg, #f0f7ff 0%, #e6f0ff 100%);
+            transform: scale(1.01);
+        }
+
+        .upload-zone.uploading {
+            border-color: #0d6efd;
+            background: linear-gradient(145deg, #f0f7ff 0%, #e6f0ff 100%);
+        }
+
+        .upload-zone.disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background: linear-gradient(145deg, #f5f5f5 0%, #e9e9e9 100%);
+        }
+
+    .upload-input {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+        z-index: 10;
+    }
+
+    .upload-content {
+        pointer-events: none;
+        width: 100%;
+    }
+
+        .upload-content label {
+            pointer-events: auto;
+        }
+
+    .upload-icon i {
+        font-size: 4rem;
+        color: #6c757d;
+        transition: all 0.3s;
+    }
+
+    .upload-zone:hover:not(.disabled) .upload-icon i {
+        color: #0d6efd;
+        transform: translateY(-5px);
+    }
+
+    .selected-file {
+        border: 1px solid #dee2e6;
+    }
+
+    .step-number {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        flex-shrink: 0;
+    }
+
+    .nav-pills .nav-link {
+        border-radius: 20px;
+        padding: 8px 16px;
+        color: #6c757d;
+        font-size: 0.85rem;
+    }
+
+        .nav-pills .nav-link.active {
+            background-color: #0d6efd;
+        }
+
+    .error-list {
+        max-height: 60px;
+        overflow-y: auto;
+    }
+
+    .sticky-top {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .table-sm td, .table-sm th {
+        padding: 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    .bg-pink {
+        background-color: #e83e8c !important;
+        color: white;
+    }
+
+    .bg-success-subtle {
+        background-color: rgba(25, 135, 84, 0.1) !important;
+    }
+
+    .form-select-lg {
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+    }
+</style>
+
+@code {
+    // Dropdown data
+    private List<CompanyDropdown> companies = new();
+    private List<DepartmentDropdown> departments = new();
+    private int selectedCompanyId = 0;
+    private int selectedDepartmentId = 0;
+    private bool showValidation = false;
+
+    // File upload state
+    private string selectedFileName = string.Empty;
+    private long selectedFileSize = 0;
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+    private bool isUploading = false;
+    private bool isImporting = false;
+    private bool isDragging = false;
+    private string previewFilter = "all";
+    private ExcelUploadResult? uploadResult;
+    private IBrowserFile? selectedFile;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCompanies();
+    }
+
+    private async Task LoadCompanies()
+    {
+        try
+        {
+            var result = await EmployeeRepository.GetCompaniesDropdownAsync();
+            companies = result.ToList();
+            Logger.LogInformation("Loaded {Count} companies", companies.Count);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading companies");
+            errorMessage = "Error loading companies. Please refresh the page.";
+        }
+    }
+
+    private async Task OnCompanyChanged()
+    {
+        selectedDepartmentId = 0;
+        departments.Clear();
+
+        if (selectedCompanyId > 0)
+        {
+            await LoadDepartments();
+        }
+
+        // Clear file if company changes
+        if (uploadResult != null)
+        {
+            ClearFile();
+        }
+    }
+
+    private async Task LoadDepartments()
+    {
+        try
+        {
+            var result = await EmployeeRepository.GetDepartmentsDropdownAsync(selectedCompanyId);
+            departments = result.ToList();
+            Logger.LogInformation("Loaded {Count} departments for company {CompanyId}", departments.Count, selectedCompanyId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading departments for company {CompanyId}", selectedCompanyId);
+            errorMessage = "Error loading departments. Please try again.";
+        }
+    }
+
+    private void HandleDragEnter() => isDragging = true;
+    private void HandleDragLeave() => isDragging = false;
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        // Validate dropdown selections first
+        showValidation = true;
+        if (selectedCompanyId == 0 || selectedDepartmentId == 0)
+        {
+            errorMessage = "Please select both Company and Department before uploading a file.";
+            return;
+        }
+
+        isDragging = false;
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+        uploadResult = null;
+        previewFilter = "all";
+
+        var file = e.File;
+        if (file == null) return;
+
+        var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+        if (extension != ".xlsx" && extension != ".xls")
+        {
+            errorMessage = "Invalid file format. Please select an Excel file (.xlsx or .xls)";
+            return;
+        }
+
+        if (file.Size > 10 * 1024 * 1024)
+        {
+            errorMessage = $"File size ({FormatFileSize(file.Size)}) exceeds the 10MB limit";
+            return;
+        }
+
+        selectedFile = file;
+        selectedFileName = file.Name;
+        selectedFileSize = file.Size;
+        isUploading = true;
+        StateHasChanged();
+
+        try
+        {
+            Logger.LogInformation("Processing file: {FileName}, Size: {Size}, Company: {CompanyId}, Department: {DepartmentId}",
+                file.Name, file.Size, selectedCompanyId, selectedDepartmentId);
+
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            memoryStream.Position = 0;
+
+            uploadResult = await ExcelService.ParseExcelFileAsync(memoryStream, file.Name);
+
+            if (!uploadResult.Success)
+            {
+                errorMessage = uploadResult.Message;
+                if (uploadResult.Errors.Any())
+                    errorMessage += ": " + string.Join(", ", uploadResult.Errors);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error processing file: {FileName}", file.Name);
+            errorMessage = $"Error processing file: {ex.Message}";
+        }
+        finally
+        {
+            isUploading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ImportData()
+    {
+        if (uploadResult == null || !uploadResult.Records.Any()) return;
+
+        // Final validation
+        if (selectedCompanyId == 0 || selectedDepartmentId == 0)
+        {
+            errorMessage = "Please select both Company and Department before importing.";
+            showValidation = true;
+            return;
+        }
+
+        isImporting = true;
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            Logger.LogInformation("Starting import - New: {New}, Update: {Update}, Company: {CompanyId}, Department: {DepartmentId}",
+                uploadResult.NewRows, uploadResult.UpdateRows, selectedCompanyId, selectedDepartmentId);
+
+            var result = await ExcelService.ImportEmployeesAsync(
+                uploadResult.Records,
+                selectedCompanyId,
+                selectedDepartmentId);
+
+            if (result.Success)
+            {
+                var companyName = companies.FirstOrDefault(c => c.CompanyId == selectedCompanyId)?.CompanyName ?? "Unknown";
+                var deptName = departments.FirstOrDefault(d => d.DepartmentId == selectedDepartmentId)?.DepartmentName ?? "Unknown";
+
+                successMessage = $"{result.Message} | Company: {companyName}, Department: {deptName}";
+                uploadResult = null;
+                selectedFileName = string.Empty;
+                selectedFileSize = 0;
+                selectedFile = null;
+            }
+            else
+            {
+                errorMessage = result.Message;
+                if (result.Errors.Any())
+                    errorMessage += ": " + string.Join(", ", result.Errors);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error importing data");
+            errorMessage = $"Error importing data: {ex.Message}";
+        }
+        finally
+        {
+            isImporting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearFile()
+    {
+        selectedFileName = string.Empty;
+        selectedFileSize = 0;
+        selectedFile = null;
+        uploadResult = null;
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+        previewFilter = "all";
+        showValidation = false;
+    }
+
+    private async Task DownloadTemplate()
+    {
+        try
+        {
+            var templateBytes = ExcelService.GenerateSampleTemplate();
+            var fileName = $"EmployeeTemplate_{DateTime.Now:yyyyMMdd}.xlsx";
+            await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, templateBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error generating template");
+            errorMessage = "Error generating template. Please try again.";
+        }
+    }
+
+    private void SetPreviewFilter(string filter)
+    {
+        previewFilter = filter;
+    }
+
+    private IEnumerable<EmployeeImportDto> GetFilteredRecords()
+    {
+        if (uploadResult == null) return Enumerable.Empty<EmployeeImportDto>();
+
+        return previewFilter switch
+        {
+            "new" => uploadResult.Records.Where(r => r.IsValid && !r.IsUpdate && !r.IsDuplicate),
+            "update" => uploadResult.Records.Where(r => r.IsValid && r.IsUpdate && !r.IsDuplicate),
+            "invalid" => uploadResult.Records.Where(r => !r.IsValid && !r.IsDuplicate),
+            "duplicate" => uploadResult.Records.Where(r => r.IsDuplicate),
+            _ => uploadResult.Records
+        };
+    }
+
+    private string GetRowClass(EmployeeImportDto record)
+    {
+        if (record.IsDuplicate) return "table-warning";
+        if (!record.IsValid) return "table-danger";
+        if (record.IsUpdate) return "table-info";
+        return "";
+    }
+
+    private string GetGenderBadgeClass(string? gender) => gender?.ToLower() switch
+    {
+        "male" => "bg-info",
+        "female" => "bg-pink",
+        "m" => "bg-info",
+        "f" => "bg-pink",
+        _ => "bg-secondary"
+    };
+
+    private string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F2} MB";
+    }
+
+    private string? TruncateText(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return null;
+        return text.Length <= maxLength ? text : text.Substring(0, maxLength - 3) + "...";
+    }
+}

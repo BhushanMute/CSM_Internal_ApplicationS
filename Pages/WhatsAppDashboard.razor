@@ -1,0 +1,298 @@
+﻿@* Pages/WhatsApp/Dashboard.razor *@
+@page "/whatsappdashboard"
+@using CSMTutorial.Data.Repositories
+@using CSMTutorial.Models
+@using CSMTutorial.Services
+@inject IWhatsAppService WhatsAppService
+@inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+<PageTitle>WhatsApp Notifications - Dashboard</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    
+    @* Header *@
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <div class="d-flex align-center gap-3">
+                    <MudAvatar Color="Color.Success" Size="Size.Large">
+                        <MudIcon Icon="@Icons.Custom.Brands.WhatsApp" />
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.h5">WhatsApp Notifications</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Send attendance alerts to parents
+                        </MudText>
+                    </div>
+                </div>
+            </MudItem>
+            <MudItem xs="12" md="6" Class="d-flex justify-end align-center gap-2">
+                <MudDatePicker @bind-Date="_selectedDate"
+                               @bind-Date:event="OnDateChanged"
+                               Label="Date"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Style="max-width: 200px;" />
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Primary" 
+                               OnClick="LoadDataAsync" Title="Refresh" />
+                <MudIconButton Icon="@Icons.Material.Filled.Settings" Color="Color.Default"
+                               Href="/settings" Title="Settings" />
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @* Stats Cards *@
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4 mud-height-full" Elevation="2">
+                <div class="d-flex justify-space-between align-center">
+                    <div>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Present Today</MudText>
+                        <MudText Typo="Typo.h4" Color="Color.Success">@_stats.PresentToday</MudText>
+                        <MudText Typo="Typo.caption">of @_stats.TotalStudents students</MudText>
+                    </div>
+                    <MudAvatar Color="Color.Success" Variant="Variant.Outlined" Size="Size.Large">
+                        <MudIcon Icon="@Icons.Material.Filled.HowToReg" />
+                    </MudAvatar>
+                </div>
+                <MudProgressLinear Color="Color.Success" Value="@((double)_stats.AttendancePercentage)" 
+                                   Class="mt-2" Rounded="true" />
+                <MudText Typo="Typo.caption" Align="Align.Right">@_stats.AttendancePercentage%</MudText>
+            </MudPaper>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4 mud-height-full" Elevation="2">
+                <div class="d-flex justify-space-between align-center">
+                    <div>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Absent Today</MudText>
+                        <MudText Typo="Typo.h4" Color="Color.Error">@_stats.AbsentToday</MudText>
+                        <MudText Typo="Typo.caption">need attention</MudText>
+                    </div>
+                    <MudAvatar Color="Color.Error" Variant="Variant.Outlined" Size="Size.Large">
+                        <MudIcon Icon="@Icons.Material.Filled.PersonOff" />
+                    </MudAvatar>
+                </div>
+            </MudPaper>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4 mud-height-full" Elevation="2">
+                <div class="d-flex justify-space-between align-center">
+                    <div>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Messages Sent</MudText>
+                        <MudText Typo="Typo.h4" Color="Color.Primary">@_stats.TotalSent</MudText>
+                        <MudText Typo="Typo.caption">today</MudText>
+                    </div>
+                    <MudAvatar Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Large">
+                        <MudIcon Icon="@Icons.Material.Filled.Send" />
+                    </MudAvatar>
+                </div>
+            </MudPaper>
+        </MudItem>
+        
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4 mud-height-full" Elevation="2">
+                <div class="d-flex justify-space-between align-center">
+                    <div>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Pending</MudText>
+                        <MudText Typo="Typo.h4" Color="Color.Warning">@_pendingMessages.Count</MudText>
+                        <MudText Typo="Typo.caption">to be sent</MudText>
+                    </div>
+                    <MudAvatar Color="Color.Warning" Variant="Variant.Outlined" Size="Size.Large">
+                        <MudIcon Icon="@Icons.Material.Filled.Schedule" />
+                    </MudAvatar>
+                </div>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* Tabs for different message types *@
+    <MudPaper Elevation="2">
+        <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+            
+            @* Check-In Tab *@
+            <MudTabPanel Text="Check-In" Icon="@Icons.Material.Filled.Login" BadgeData="@_checkInMessages.Count" 
+                         BadgeColor="Color.Success">
+                <PendingMessagesList Messages="_checkInMessages" 
+                                     MessageType="CHECKIN"
+                                     OnSendClicked="HandleSendClicked"
+                                     OnMarkAsSent="HandleMarkAsSent"
+                                     OnSendAll="HandleSendAll"
+                                     IsLoading="_isLoading" />
+            </MudTabPanel>
+            
+            @* Check-Out Tab *@
+            <MudTabPanel Text="Check-Out" Icon="@Icons.Material.Filled.Logout" BadgeData="@_checkOutMessages.Count"
+                         BadgeColor="Color.Info">
+                <PendingMessagesList Messages="_checkOutMessages"
+                                     MessageType="CHECKOUT"
+                                     OnSendClicked="HandleSendClicked"
+                                     OnMarkAsSent="HandleMarkAsSent"
+                                     OnSendAll="HandleSendAll"
+                                     IsLoading="_isLoading" />
+            </MudTabPanel>
+            
+            @* Absent Tab *@
+            <MudTabPanel Text="Absent" Icon="@Icons.Material.Filled.PersonOff" BadgeData="@_absentMessages.Count"
+                         BadgeColor="Color.Error">
+                <PendingMessagesList Messages="_absentMessages"
+                                     MessageType="ABSENT"
+                                     OnSendClicked="HandleSendClicked"
+                                     OnMarkAsSent="HandleMarkAsSent"
+                                     OnSendAll="HandleSendAll"
+                                     IsLoading="_isLoading" />
+            </MudTabPanel>
+            
+        </MudTabs>
+    </MudPaper>
+
+</MudContainer>
+
+@* Auto-refresh timer display *@
+@if (_config?.RefreshInterval > 0)
+{
+    <MudPaper Class="pa-2 mt-4" Elevation="1" Style="position: fixed; bottom: 20px; right: 20px;">
+        <MudText Typo="Typo.caption">
+            <MudIcon Icon="@Icons.Material.Filled.Autorenew" Size="Size.Small" Class="mr-1" />
+            Auto-refresh in @_refreshCountdown seconds
+        </MudText>
+    </MudPaper>
+}
+
+@code {
+    private DateTime? _selectedDate = DateTime.Today;
+    private DashboardStats _stats = new();
+    private WhatsAppConfig? _config;
+    private List<PendingMessage> _pendingMessages = new();
+    private List<PendingMessage> _checkInMessages = new();
+    private List<PendingMessage> _checkOutMessages = new();
+    private List<PendingMessage> _absentMessages = new();
+    private bool _isLoading = true;
+    private System.Timers.Timer? _refreshTimer;
+    private int _refreshCountdown = 60;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+        StartAutoRefresh();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _config = await WhatsAppService.GetConfigAsync();
+            _stats = await WhatsAppService.GetDashboardStatsAsync(_selectedDate);
+            
+            // Load pending messages
+            _checkInMessages = await WhatsAppService.GetPendingCheckInMessagesAsync(_selectedDate);
+            _checkOutMessages = await WhatsAppService.GetPendingCheckOutMessagesAsync(_selectedDate);
+            _absentMessages = await WhatsAppService.GetAbsentStudentsMessagesAsync(_selectedDate);
+            
+            // Prepare messages with URLs
+            _checkInMessages = await WhatsAppService.PrepareMessagesAsync(_checkInMessages, "CHECKIN");
+            _checkOutMessages = await WhatsAppService.PrepareMessagesAsync(_checkOutMessages, "CHECKOUT");
+            _absentMessages = await WhatsAppService.PrepareMessagesAsync(_absentMessages, "ABSENT");
+            
+            _pendingMessages = _checkInMessages.Concat(_checkOutMessages).Concat(_absentMessages).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading data: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnDateChanged(DateTime? date)
+    {
+        _selectedDate = date;
+        await LoadDataAsync();
+    }
+
+    private void StartAutoRefresh()
+    {
+        if (_config?.RefreshInterval > 0)
+        {
+            _refreshCountdown = _config.RefreshInterval;
+            _refreshTimer = new System.Timers.Timer(1000);
+            _refreshTimer.Elapsed += async (s, e) =>
+            {
+                _refreshCountdown--;
+                if (_refreshCountdown <= 0)
+                {
+                    _refreshCountdown = _config?.RefreshInterval ?? 60;
+                    await InvokeAsync(LoadDataAsync);
+                }
+                await InvokeAsync(StateHasChanged);
+            };
+            _refreshTimer.Start();
+        }
+    }
+
+    private async Task HandleSendClicked(PendingMessage message)
+    {
+        // Open WhatsApp Web
+        await JSRuntime.InvokeVoidAsync("open", message.WhatsAppUrl, "_blank");
+        
+        // Log the message as pending (user will manually confirm)
+        await WhatsAppService.LogMessageAsync(message, "PENDING", "System");
+        
+        Snackbar.Add($"WhatsApp opened for {message.StudentName}", Severity.Info);
+    }
+
+    private async Task HandleMarkAsSent(PendingMessage message)
+    {
+        // Log as sent
+        await WhatsAppService.LogMessageAsync(message, "SENT", "Manual");
+        
+        // Remove from list
+        switch (message.MessageType)
+        {
+            case "CHECKIN":
+                _checkInMessages.Remove(message);
+                break;
+            case "CHECKOUT":
+                _checkOutMessages.Remove(message);
+                break;
+            case "ABSENT":
+                _absentMessages.Remove(message);
+                break;
+        }
+        
+        _stats.TotalSent++;
+        Snackbar.Add($"Message marked as sent for {message.StudentName}", Severity.Success);
+        StateHasChanged();
+    }
+
+    private async Task HandleSendAll(List<PendingMessage> messages)
+    {
+        if (!messages.Any()) return;
+        
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"This will open {messages.Count} WhatsApp windows. Continue?");
+        
+        if (!confirmed) return;
+        
+        foreach (var message in messages.Take(10)) // Limit to 10 at a time
+        {
+            await JSRuntime.InvokeVoidAsync("open", message.WhatsAppUrl, "_blank");
+            await WhatsAppService.LogMessageAsync(message, "PENDING", "Bulk");
+            await Task.Delay(500); // Small delay between windows
+        }
+        
+        Snackbar.Add($"Opened {Math.Min(messages.Count, 10)} WhatsApp windows", Severity.Info);
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+    }
+}

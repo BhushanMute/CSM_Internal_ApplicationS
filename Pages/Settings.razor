@@ -1,0 +1,793 @@
+﻿@page "/settings"
+@attribute [Authorize]
+
+@using Microsoft.AspNetCore.Authorization
+@using CSMTutorial.Models
+@using CSMTutorial.Services
+
+@inject IWhatsAppService WhatsAppService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>WhatsApp Configuration | EMS</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-4">
+    
+    @* Header Section *@
+    <MudPaper Elevation="0" Class="mb-4 pa-6 rounded-lg" Style="background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);">
+        <MudGrid>
+            <MudItem xs="12" md="8" Class="d-flex align-items-center">
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" 
+                               Color="Color.Surface" 
+                               Size="Size.Large"
+                               Href="/whatsappdashboard" 
+                               Class="mr-3" />
+                <MudAvatar Size="Size.Large" Class="mr-4" Style="background: rgba(255,255,255,0.2);">
+                    <MudIcon Icon="@Icons.Custom.Brands.WhatsApp" Size="Size.Large" Style="color: white;" />
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.h4" Style="color: white; font-weight: 600;">
+                        WhatsApp Notification Center
+                    </MudText>
+                    <MudText Typo="Typo.body1" Style="color: rgba(255,255,255,0.9);">
+                        Configure automated parent notifications and message templates
+                    </MudText>
+                </div>
+            </MudItem>
+            <MudItem xs="12" md="4" Class="d-flex align-items-center justify-end">
+                <MudChip T="string"
+                         Color="Color.Surface"
+                         Size="Size.Large"
+                         Icon="@(_config?.IsEnabled ?? false
+                                             ? Icons.Material.Filled.CheckCircle
+                                             : Icons.Material.Filled.Warning)">
+
+                    @(_config?.IsEnabled ?? false ? "Active" : "Inactive")
+
+                </MudChip>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @if (_config != null)
+    {
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudGrid>
+                
+                @* Left Column - Configuration *@
+                <MudItem xs="12" lg="8">
+                    
+                    @* General Settings Card *@
+                    <MudCard Elevation="2" Class="mb-4 rounded-lg">
+                        <MudCardHeader Style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6" Style="color: white;">
+                                    <MudIcon Icon="@Icons.Material.Filled.Tune" Class="mr-2" Style="color: white;" />
+                                    General Configuration
+                                </MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudGrid>
+                                <MudItem xs="12">
+                                    <MudSwitch @bind-Value="_config.IsEnabled" 
+                                               Label="Enable WhatsApp Notifications" 
+                                               Color="Color.Success"
+                                               Size="Size.Medium"
+                                               Class="mb-2" />
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        Turn on to automatically send notifications to parents
+                                    </MudText>
+                                </MudItem>
+
+                                <MudItem xs="12" md="6">
+                                    <MudTextField @bind-Value="_config.InstituteName" 
+                                                  Label="Institution Name"
+                                                  Variant="Variant.Outlined" 
+                                                  Required="true"
+                                                  Adornment="Adornment.Start"
+                                                  AdornmentIcon="@Icons.Material.Filled.School" />
+                                </MudItem>
+
+                                <MudItem xs="12" md="6">
+                                    <MudTextField @bind-Value="_config.ContactNumber" 
+                                                  Label="Contact Number"
+                                                  Variant="Variant.Outlined" 
+                                                  Placeholder="(555) 123-4567"
+                                                  Adornment="Adornment.Start"
+                                                  AdornmentIcon="@Icons.Material.Filled.Phone" />
+                                </MudItem>
+
+                                <MudItem xs="12" md="6">
+                                    <MudTextField @bind-Value="_config.DefaultCountryCode" 
+                                                  Label="Country Code"
+                                                  Variant="Variant.Outlined" 
+                                                  Placeholder="+1"
+                                                  Adornment="Adornment.Start"
+                                                  AdornmentIcon="@Icons.Material.Filled.Public" />
+                                </MudItem>
+
+                                <MudItem xs="12" md="6">
+                                    <MudNumericField @bind-Value="_config.RefreshInterval" 
+                                                     Label="Auto-Refresh Interval (seconds)"
+                                                     Variant="Variant.Outlined" 
+                                                     Min="0" 
+                                                     Max="300"
+                                                     Adornment="Adornment.Start"
+                                                     AdornmentIcon="@Icons.Material.Filled.Timer" />
+                                </MudItem>
+                            </MudGrid>
+                        </MudCardContent>
+                    </MudCard>
+
+                    @* Alert Settings Card *@
+                    <MudCard Elevation="2" Class="mb-4 rounded-lg">
+                        <MudCardHeader Style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6" Style="color: white;">
+                                    <MudIcon Icon="@Icons.Material.Filled.NotificationsActive" Class="mr-2" Style="color: white;" />
+                                    Alert Preferences
+                                </MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudGrid>
+                                <MudItem xs="12" sm="6" md="3">
+                                    <MudPaper Elevation="0" Class="pa-3 rounded-lg" Style="border: 2px solid #4caf50;">
+                                        <MudSwitch @bind-Value="_config.SendCheckInAlert" 
+                                                   Color="Color.Success"
+                                                   Label="Check-In"
+                                                   Size="Size.Medium" />
+                                        <MudIcon Icon="@Icons.Material.Filled.Login" 
+                                                 Color="Color.Success" 
+                                                 Size="Size.Large" 
+                                                 Class="mt-2" />
+                                    </MudPaper>
+                                </MudItem>
+
+                                <MudItem xs="12" sm="6" md="3">
+                                    <MudPaper Elevation="0" Class="pa-3 rounded-lg" Style="border: 2px solid #2196f3;">
+                                        <MudSwitch @bind-Value="_config.SendCheckOutAlert" 
+                                                   Color="Color.Info"
+                                                   Label="Check-Out"
+                                                   Size="Size.Medium" />
+                                        <MudIcon Icon="@Icons.Material.Filled.Logout" 
+                                                 Color="Color.Info" 
+                                                 Size="Size.Large" 
+                                                 Class="mt-2" />
+                                    </MudPaper>
+                                </MudItem>
+
+                                <MudItem xs="12" sm="6" md="3">
+                                    <MudPaper Elevation="0" Class="pa-3 rounded-lg" Style="border: 2px solid #f44336;">
+                                        <MudSwitch @bind-Value="_config.SendAbsentAlert" 
+                                                   Color="Color.Error"
+                                                   Label="Absent"
+                                                   Size="Size.Medium" />
+                                        <MudIcon Icon="@Icons.Material.Filled.PersonOff" 
+                                                 Color="Color.Error" 
+                                                 Size="Size.Large" 
+                                                 Class="mt-2" />
+                                    </MudPaper>
+                                </MudItem>
+
+                                <MudItem xs="12" sm="6" md="3">
+                                    <MudPaper Elevation="0" Class="pa-3 rounded-lg" Style="border: 2px solid #ff9800;">
+                                        <MudSwitch @bind-Value="_config.SendLateAlert" 
+                                                   Color="Color.Warning"
+                                                   Label="Late Arrival"
+                                                   Size="Size.Medium" />
+                                        <MudIcon Icon="@Icons.Material.Filled.Schedule" 
+                                                 Color="Color.Warning" 
+                                                 Size="Size.Large" 
+                                                 Class="mt-2" />
+                                    </MudPaper>
+                                </MudItem>
+
+                                <MudItem xs="12" md="6">
+                                    <MudTimePicker @bind-Time="_absentAlertTime" 
+                                                   Label="Absent Alert Time"
+                                                   Variant="Variant.Outlined"
+                                                   Adornment="Adornment.Start"
+                                                   AdornmentIcon="@Icons.Material.Filled.AlarmOn" />
+                                </MudItem>
+
+                                <MudItem xs="12" md="6">
+                                    <MudNumericField @bind-Value="_config.LateThresholdMinutes" 
+                                                     Label="Late Threshold (minutes)"
+                                                     Variant="Variant.Outlined" 
+                                                     Min="5" 
+                                                     Max="120"
+                                                     Adornment="Adornment.Start"
+                                                     AdornmentIcon="@Icons.Material.Filled.AccessTime" />
+                                </MudItem>
+                            </MudGrid>
+                        </MudCardContent>
+                    </MudCard>
+
+                    @* Message Templates Card *@
+                    <MudCard Elevation="2" Class="mb-4 rounded-lg">
+                        <MudCardHeader Style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6" Style="color: white;">
+                                    <MudIcon Icon="@Icons.Material.Filled.Message" Class="mr-2" Style="color: white;" />
+                                    Message Templates
+                                </MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.Code">
+                                <MudText Typo="Typo.body2">
+                                    <strong>Available Variables:</strong>
+                                    <code class="mx-1">{{StudentName}}</code>
+                                    <code class="mx-1">{{ParentName}}</code>
+                                    <code class="mx-1">{{Date}}</code>
+                                    <code class="mx-1">{{Time}}</code>
+                                    <code class="mx-1">{{BranchName}}</code>
+                                    <code class="mx-1">{{CourseName}}</code>
+                                    <code class="mx-1">{{InstituteName}}</code>
+                                    <code class="mx-1">{{ContactNumber}}</code>
+                                </MudText>
+                            </MudAlert>
+
+                            <MudTabs Elevation="0" 
+                                     Rounded="true" 
+                                     Border="true" 
+                                     Color="Color.Primary"
+                                     ApplyEffectsToContainer="true"
+                                     PanelClass="pa-4">
+
+                                <MudTabPanel Text="Check-In" Icon="@Icons.Material.Filled.Login" BadgeColor="Color.Success">
+                                    <MudTextField @bind-Value="_config.CheckInMessage"
+                                                  Label="Check-In Message Template"
+                                                  Variant="Variant.Outlined"
+                                                  Lines="10"
+                                                  HelperText="Sent when a student checks in" />
+                                    <MudButton Variant="Variant.Text" 
+                                               Color="Color.Primary"
+                                               OnClick='() => PreviewMessage(_config.CheckInMessage ?? "", "CHECKIN")'
+                                               StartIcon="@Icons.Material.Filled.RemoveRedEye" 
+                                               Class="mt-3">
+                                        Preview Message
+                                    </MudButton>
+                                </MudTabPanel>
+
+                                <MudTabPanel Text="Check-Out" Icon="@Icons.Material.Filled.Logout" BadgeColor="Color.Info">
+                                    <MudTextField @bind-Value="_config.CheckOutMessage"
+                                                  Label="Check-Out Message Template"
+                                                  Variant="Variant.Outlined"
+                                                  Lines="10"
+                                                  HelperText="Sent when a student checks out" />
+                                    <MudButton Variant="Variant.Text" 
+                                               Color="Color.Primary"
+                                               OnClick='() => PreviewMessage(_config.CheckOutMessage ?? "", "CHECKOUT")'
+                                               StartIcon="@Icons.Material.Filled.RemoveRedEye" 
+                                               Class="mt-3">
+                                        Preview Message
+                                    </MudButton>
+                                </MudTabPanel>
+
+                                <MudTabPanel Text="Absent" Icon="@Icons.Material.Filled.PersonOff" BadgeColor="Color.Error">
+                                    <MudTextField @bind-Value="_config.AbsentMessage"
+                                                  Label="Absent Alert Template"
+                                                  Variant="Variant.Outlined"
+                                                  Lines="10"
+                                                  HelperText="Sent when a student is marked absent" />
+                                    <MudButton Variant="Variant.Text" 
+                                               Color="Color.Primary"
+                                               OnClick='() => PreviewMessage(_config.AbsentMessage ?? "", "ABSENT")'
+                                               StartIcon="@Icons.Material.Filled.RemoveRedEye" 
+                                               Class="mt-3">
+                                        Preview Message
+                                    </MudButton>
+                                </MudTabPanel>
+
+                                <MudTabPanel Text="Late Arrival" Icon="@Icons.Material.Filled.Schedule" BadgeColor="Color.Warning">
+                                    <MudTextField @bind-Value="_config.LateArrivalMessage"
+                                                  Label="Late Arrival Template"
+                                                  Variant="Variant.Outlined"
+                                                  Lines="10"
+                                                  HelperText="Sent when a student arrives late" />
+                                    <MudButton Variant="Variant.Text" 
+                                               Color="Color.Primary"
+                                               OnClick='() => PreviewMessage(_config.LateArrivalMessage ?? "", "LATE")'
+                                               StartIcon="@Icons.Material.Filled.RemoveRedEye" 
+                                               Class="mt-3">
+                                        Preview Message
+                                    </MudButton>
+                                </MudTabPanel>
+
+                            </MudTabs>
+                        </MudCardContent>
+                    </MudCard>
+                    
+                </MudItem>
+
+                @* Right Column - Quick Actions *@
+                <MudItem xs="12" lg="4">
+                    
+                    @* Quick Templates Card *@
+                    <MudCard Elevation="2" Class="mb-4 rounded-lg sticky-top" Style="top: 20px;">
+                        <MudCardHeader Style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6" Style="color: white;">
+                                    <MudIcon Icon="@Icons.Material.Filled.AutoFixHigh" Class="mr-2" Style="color: white;" />
+                                    Quick Templates
+                                </MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudStack Spacing="3">
+                                <MudButton Variant="Variant.Outlined" 
+                                           Color="Color.Primary"
+                                           FullWidth="true"
+                                           StartIcon="@Icons.Material.Filled.TextFields"
+                                           OnClick="ApplySimpleTemplate"
+                                           Size="Size.Large">
+                                    Simple & Clean
+                                </MudButton>
+
+                                <MudButton Variant="Variant.Outlined" 
+                                           Color="Color.Secondary"
+                                           FullWidth="true"
+                                           StartIcon="@Icons.Material.Filled.Article"
+                                           OnClick="ApplyDetailedTemplate"
+                                           Size="Size.Large">
+                                    Detailed & Professional
+                                </MudButton>
+
+                                <MudButton Variant="Variant.Outlined" 
+                                           Color="Color.Success"
+                                           FullWidth="true"
+                                           StartIcon="@Icons.Material.Filled.EmojiEmotions"
+                                           OnClick="ApplyEmojiTemplate"
+                                           Size="Size.Large">
+                                    With Emojis
+                                </MudButton>
+
+                                <MudButton Variant="Variant.Outlined" 
+                                           Color="Color.Dark"
+                                           FullWidth="true"
+                                           StartIcon="@Icons.Material.Filled.Business"
+                                           OnClick="ApplyFormalTemplate"
+                                           Size="Size.Large">
+                                    Formal & Corporate
+                                </MudButton>
+                            </MudStack>
+                        </MudCardContent>
+                    </MudCard>
+
+                    @* Status Card *@
+                    <MudCard Elevation="2" Class="mb-4 rounded-lg">
+                        <MudCardHeader Style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);">
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6" Style="color: #333;">
+                                    <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-2" />
+                                    System Status
+                                </MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudStack Spacing="2">
+                                <div class="d-flex justify-space-between align-center">
+                                    <MudText Typo="Typo.body2">Notifications</MudText>
+                                    <MudChip T="string"
+                                             Size="Size.Small"
+                                             Color="@(_config.IsEnabled ? Color.Success : Color.Default)">
+                                        @(_config.IsEnabled ? "Enabled" : "Disabled")
+                                    </MudChip>
+                                </div>
+                                <MudDivider />
+                                <div class="d-flex justify-space-between align-center">
+                                    <MudText Typo="Typo.body2">Check-In Alerts</MudText>
+                                    <MudIcon Icon="@(_config.SendCheckInAlert ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel)" 
+                                             Color="@(_config.SendCheckInAlert ? Color.Success : Color.Default)" />
+                                </div>
+                                <div class="d-flex justify-space-between align-center">
+                                    <MudText Typo="Typo.body2">Check-Out Alerts</MudText>
+                                    <MudIcon Icon="@(_config.SendCheckOutAlert ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel)" 
+                                             Color="@(_config.SendCheckOutAlert ? Color.Success : Color.Default)" />
+                                </div>
+                                <div class="d-flex justify-space-between align-center">
+                                    <MudText Typo="Typo.body2">Absent Alerts</MudText>
+                                    <MudIcon Icon="@(_config.SendAbsentAlert ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel)" 
+                                             Color="@(_config.SendAbsentAlert ? Color.Success : Color.Default)" />
+                                </div>
+                                <div class="d-flex justify-space-between align-center">
+                                    <MudText Typo="Typo.body2">Late Alerts</MudText>
+                                    <MudIcon Icon="@(_config.SendLateAlert ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel)" 
+                                             Color="@(_config.SendLateAlert ? Color.Success : Color.Default)" />
+                                </div>
+                            </MudStack>
+                        </MudCardContent>
+                    </MudCard>
+
+                    @* Save Actions Card *@
+                    <MudPaper Elevation="3" Class="pa-4 rounded-lg" Style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <MudStack Spacing="3">
+                            <MudButton Variant="Variant.Filled" 
+                                       Color="Color.Surface"
+                                       FullWidth="true"
+                                       Size="Size.Large"
+                                       Disabled="@(!_isValid || _isSaving)"
+                                       StartIcon="@Icons.Material.Filled.Save"
+                                       OnClick="SaveSettings">
+                                @if (_isSaving)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    <span>Saving...</span>
+                                }
+                                else
+                                {
+                                    <span>Save Configuration</span>
+                                }
+                            </MudButton>
+
+                            <MudButton Variant="Variant.Outlined" 
+                                       Style="color: white; border-color: white;"
+                                       FullWidth="true"
+                                       Size="Size.Large"
+                                       StartIcon="@Icons.Material.Filled.Cancel"
+                                       Href="/whatsappdashboard">
+                                Cancel Changes
+                            </MudButton>
+                        </MudStack>
+                    </MudPaper>
+
+                </MudItem>
+
+            </MudGrid>
+        </MudForm>
+    }
+    else
+    {
+        <MudPaper Class="pa-8 d-flex justify-center align-center" Style="min-height: 400px;">
+            <MudProgressCircular Size="Size.Large" Indeterminate="true" Color="Color.Primary" />
+        </MudPaper>
+    }
+    
+</MudContainer>
+
+@* Preview Dialog *@
+<MudDialog @bind-IsVisible="_showPreviewDialog" 
+           Options="new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h5">
+            <MudIcon Icon="@Icons.Custom.Brands.WhatsApp" Color="Color.Success" Class="mr-2" />
+            Message Preview
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudPaper Elevation="0" Class="pa-6" Style="background: #E5DDD5;">
+            <MudPaper Class="pa-4" 
+                      Elevation="1" 
+                      Style="background: #DCF8C6; border-radius: 8px 8px 8px 0; max-width: 80%; margin-left: auto; position: relative;">
+                <MudText Style="white-space: pre-wrap; font-size: 14px; color: #303030;">
+                    @_previewText
+                </MudText>
+                <div class="d-flex justify-end align-center mt-2" style="gap: 4px;">
+                    <MudText Typo="Typo.caption" Style="color: #667781;">
+                        @DateTime.Now.ToString("h:mm tt")
+                    </MudText>
+                    <MudIcon Icon="@Icons.Material.Filled.DoneAll" Size="Size.Small" Style="color: #53bdeb;" />
+                </div>
+            </MudPaper>
+        </MudPaper>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" Variant="Variant.Text" OnClick="() => _showPreviewDialog = false">
+            Close
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .sticky-top {
+        position: sticky;
+    }
+    
+    code {
+        background: #f5f5f5;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.85em;
+        color: #e91e63;
+    }
+    
+    .rounded-lg {
+        border-radius: 12px !important;
+    }
+</style>
+
+@code {
+    private WhatsAppConfig? _config;
+    private MudForm? _form;
+    private bool _isValid;
+    private bool _isSaving;
+    private bool _showPreviewDialog;
+    private string _previewText = string.Empty;
+    private TimeSpan? _absentAlertTime;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _config = await WhatsAppService.GetConfigAsync();
+            if (_config == null)
+            {
+                _config = new WhatsAppConfig();
+            }
+            _absentAlertTime = _config.AbsentAlertTime;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading configuration: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SaveSettings()
+    {
+        if (_config == null)
+        {
+            Snackbar.Add("Configuration is not loaded", Severity.Error);
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            if (_absentAlertTime.HasValue)
+            {
+                _config.AbsentAlertTime = _absentAlertTime.Value;
+            }
+
+            var configId = await WhatsAppService.SaveConfigAsync(_config, "Admin");
+
+            if (configId > 0)
+            {
+                _config.ConfigId = configId;
+                Snackbar.Add("Configuration saved successfully!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to save configuration", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void PreviewMessage(string template, string messageType)
+    {
+        if (string.IsNullOrEmpty(template))
+        {
+            Snackbar.Add("Message template is empty", Severity.Warning);
+            return;
+        }
+
+        var sampleData = new PendingMessage
+        {
+            StudentName = "Alex Johnson",
+            ParentName = "Mr. Robert Johnson",
+            PunchTime = DateTime.Now,
+            BranchName = "Downtown Campus",
+            CourseName = "Advanced Mathematics"
+        };
+
+        _previewText = template
+            .Replace("{{StudentName}}", sampleData.StudentName)
+            .Replace("{{ParentName}}", sampleData.ParentName)
+            .Replace("{{Date}}", sampleData.PunchTime.ToString("MMMM dd, yyyy"))
+            .Replace("{{Time}}", sampleData.PunchTime.ToString("h:mm tt"))
+            .Replace("{{BranchName}}", sampleData.BranchName)
+            .Replace("{{CourseName}}", sampleData.CourseName)
+            .Replace("{{InstituteName}}", _config?.InstituteName ?? "Learning Institute")
+            .Replace("{{ContactNumber}}", _config?.ContactNumber ?? "(555) 123-4567");
+
+        _showPreviewDialog = true;
+    }
+
+    private void ApplySimpleTemplate()
+    {
+        if (_config == null) return;
+
+        _config.CheckInMessage = "Hi! {{StudentName}} has arrived at {{InstituteName}} at {{Time}}.";
+        _config.CheckOutMessage = "Hi! {{StudentName}} has departed from {{InstituteName}} at {{Time}}.";
+        _config.AbsentMessage = "Notice: {{StudentName}} was marked absent on {{Date}}. Please contact us if this is incorrect.";
+        _config.LateArrivalMessage = "Notice: {{StudentName}} arrived late at {{Time}} on {{Date}}.";
+
+        Snackbar.Add("Simple template applied", Severity.Success);
+    }
+
+    private void ApplyDetailedTemplate()
+    {
+        if (_config == null) return;
+
+        _config.CheckInMessage = @"Dear {{ParentName}},
+
+This is to confirm that {{StudentName}} has checked in at {{InstituteName}}.
+
+📅 Date: {{Date}}
+⏰ Time: {{Time}}
+📍 Location: {{BranchName}}
+📚 Program: {{CourseName}}
+
+Thank you for choosing {{InstituteName}}.
+
+For questions, contact us at {{ContactNumber}}.";
+
+        _config.CheckOutMessage = @"Dear {{ParentName}},
+
+{{StudentName}} has safely departed from {{InstituteName}}.
+
+📅 Date: {{Date}}
+⏰ Time: {{Time}}
+📍 Location: {{BranchName}}
+
+Have a wonderful day!
+
+{{InstituteName}}
+{{ContactNumber}}";
+
+        _config.AbsentMessage = @"Dear {{ParentName}},
+
+We noticed that {{StudentName}} was marked absent today.
+
+📅 Date: {{Date}}
+📍 Campus: {{BranchName}}
+📚 Program: {{CourseName}}
+
+If this is incorrect or if there's a concern, please contact us immediately at {{ContactNumber}}.
+
+Best regards,
+{{InstituteName}}";
+
+        _config.LateArrivalMessage = @"Dear {{ParentName}},
+
+{{StudentName}} arrived late to {{InstituteName}} today.
+
+📅 Date: {{Date}}
+⏰ Arrival Time: {{Time}}
+📍 Campus: {{BranchName}}
+
+Please help us ensure timely attendance in the future.
+
+Thank you,
+{{InstituteName}}
+{{ContactNumber}}";
+
+        Snackbar.Add("Detailed template applied", Severity.Success);
+    }
+
+    private void ApplyEmojiTemplate()
+    {
+        if (_config == null) return;
+
+        _config.CheckInMessage = @"🎒 *{{InstituteName}}*
+
+✅ *Check-In Confirmed*
+
+Hello Parent! 👋
+{{StudentName}} has arrived safely! 
+
+📅 {{Date}}
+⏰ {{Time}}
+📍 {{BranchName}}
+
+Have a great learning day! 📚✨";
+
+        _config.CheckOutMessage = @"🎒 *{{InstituteName}}*
+
+👋 *Departure Notification*
+
+Hello Parent!
+{{StudentName}} has left the campus.
+
+📅 {{Date}}
+⏰ {{Time}}
+
+See you tomorrow! 😊🌟";
+
+        _config.AbsentMessage = @"🎒 *{{InstituteName}}*
+
+⚠️ *Absence Notice*
+
+Hello Parent,
+{{StudentName}} was marked *ABSENT* today.
+
+📅 {{Date}}
+📍 {{BranchName}}
+
+📞 Please call us: {{ContactNumber}}
+
+Hope everything is okay! 🙏";
+
+        _config.LateArrivalMessage = @"🎒 *{{InstituteName}}*
+
+⏰ *Late Arrival Notice*
+
+Hello Parent,
+{{StudentName}} arrived late today.
+
+📅 {{Date}}
+⏰ {{Time}}
+📍 {{BranchName}}
+
+Please help ensure punctuality. Thanks! 🙏";
+
+        Snackbar.Add("Emoji template applied", Severity.Success);
+    }
+
+    private void ApplyFormalTemplate()
+    {
+        if (_config == null) return;
+
+        _config.CheckInMessage = @"Dear Parent/Guardian,
+
+Greetings from {{InstituteName}}.
+
+We wish to inform you that your child, {{StudentName}}, has arrived at our facility.
+
+Date: {{Date}}
+Time: {{Time}}
+Campus: {{BranchName}}
+Program: {{CourseName}}
+
+Best regards,
+Administrative Office
+{{InstituteName}}
+Contact: {{ContactNumber}}";
+
+        _config.CheckOutMessage = @"Dear Parent/Guardian,
+
+Greetings from {{InstituteName}}.
+
+We wish to inform you that your child, {{StudentName}}, has departed from our facility.
+
+Date: {{Date}}
+Time: {{Time}}
+Campus: {{BranchName}}
+
+Best regards,
+Administrative Office
+{{InstituteName}}";
+
+        _config.AbsentMessage = @"Dear Parent/Guardian,
+
+Greetings from {{InstituteName}}.
+
+We regret to inform you that your child, {{StudentName}}, was marked absent on {{Date}}.
+
+Campus: {{BranchName}}
+Program: {{CourseName}}
+
+If this information is incorrect, kindly contact our administrative office immediately.
+
+Best regards,
+Administrative Office
+{{InstituteName}}
+Contact: {{ContactNumber}}";
+
+        _config.LateArrivalMessage = @"Dear Parent/Guardian,
+
+Greetings from {{InstituteName}}.
+
+We wish to inform you that your child, {{StudentName}}, arrived late on {{Date}} at {{Time}}.
+
+Campus: {{BranchName}}
+
+We kindly request your cooperation in ensuring punctual attendance.
+
+Best regards,
+Administrative Office
+{{InstituteName}}";
+
+        Snackbar.Add("Formal template applied", Severity.Success);
+    }
+}

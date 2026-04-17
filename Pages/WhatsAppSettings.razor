@@ -1,0 +1,204 @@
+﻿@* @page "/whatsappsettings"
+
+@using CSMTutorial.Models
+@using CSMTutorial.Services
+@inject IWhatsAppService WhatsAppService
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+
+    <MudPaper Class="pa-4">
+
+        <MudText Typo="Typo.h5" Class="mb-4">
+            <MudIcon Icon="@Icons.Custom.Brands.WhatsApp" Color="Color.Success" Class="mr-2" />
+            WhatsApp Notification Settings
+        </MudText>
+
+        @if (_settings == null)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else
+        {
+            <MudGrid>
+
+                <!-- Enable -->
+                <MudItem xs="12">
+                    <MudSwitch @bind-Value="_settings.IsEnabled"
+                               Label="Enable WhatsApp Notifications"
+                               Color="Color.Success" />
+                </MudItem>
+
+                <!-- Provider -->
+                <MudItem xs="12" md="6">
+                    <MudSelect T="string"
+                               @bind-Value="_settings.APIProvider"
+                               Label="API Provider"
+                               Variant="Variant.Outlined">
+
+                        <MudSelectItem T="string" Value="@("Gupshup")">Gupshup</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("Twilio")">Twilio</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("WATI")">WATI</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("Meta")">Meta (Official API)</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("Custom")">Custom API</MudSelectItem>
+
+                    </MudSelect>
+                </MudItem>
+
+                <!-- Sender -->
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_settings.SenderNumber"
+                                  Label="WhatsApp Business Number"
+                                  Variant="Variant.Outlined"
+                                  Placeholder="919876543210" />
+                </MudItem>
+
+                <!-- Endpoint -->
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_settings.APIEndpoint"
+                                  Label="API Endpoint URL"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+
+                <!-- Keys -->
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_settings.APIKey"
+                                  Label="API Key"
+                                  Variant="Variant.Outlined"
+                                  InputType="InputType.Password" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_settings.APISecret"
+                                  Label="API Secret"
+                                  Variant="Variant.Outlined"
+                                  InputType="InputType.Password" />
+                </MudItem>
+
+                <!-- Templates -->
+                <MudItem xs="12">
+                    <MudDivider Class="my-4" />
+                    <MudText Typo="Typo.h6">Message Templates</MudText>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudSwitch @bind-Value="_settings.SendCheckInAlert"
+                               Label="Send Check-IN Alert"
+                               Color="Color.Primary" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudSwitch @bind-Value="_settings.SendCheckOutAlert"
+                               Label="Send Check-OUT Alert"
+                               Color="Color.Primary" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_settings.CheckInMessageFormat"
+                                  Label="Check-IN Message Template"
+                                  Variant="Variant.Outlined"
+                                  Lines="3"
+                                  HelperText="Use: {{StudentName}}, {{Time}}, {{Date}}, {{BranchName}}, {{CourseName}}" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_settings.CheckOutMessageFormat"
+                                  Label="Check-OUT Message Template"
+                                  Variant="Variant.Outlined"
+                                  Lines="3"
+                                  HelperText="Use: {{StudentName}}, {{Time}}, {{Date}}, {{BranchName}}, {{CourseName}}" />
+                </MudItem>
+
+                <!-- Test Mode -->
+                <MudItem xs="12">
+                    <MudDivider Class="my-4" />
+                    <MudText Typo="Typo.h6">Test Mode</MudText>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudSwitch @bind-Value="_settings.IsTestMode"
+                               Label="Enable Test Mode"
+                               Color="Color.Warning" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_settings.TestMobileNumber"
+                                  Label="Test Mobile Number"
+                                  Variant="Variant.Outlined"
+                                  Disabled="@(!_settings.IsTestMode)"
+                                  Placeholder="919876543210" />
+                </MudItem>
+
+                <!-- Buttons -->
+                <MudItem xs="12" Class="d-flex gap-2 mt-4">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               OnClick="SaveSettings"
+                               StartIcon="@Icons.Material.Filled.Save">
+                        Save Settings
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Success"
+                               OnClick="TestConnection"
+                               StartIcon="@Icons.Material.Filled.Send">
+                        Send Test Message
+                    </MudButton>
+                </MudItem>
+
+            </MudGrid>
+        }
+
+    </MudPaper>
+
+</MudContainer>
+
+@code {
+
+    private WhatsAppSettings? _settings;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await WhatsAppService.GetSettingsAsync();
+
+    }
+
+    private async Task SaveSettings()
+    {
+        if (_settings == null) return;
+
+        var success = await WhatsAppService.UpdateSettingsAsync(_settings);
+
+        if (success)
+            Snackbar.Add("Settings saved successfully!", Severity.Success);
+        else
+            Snackbar.Add("Failed to save settings", Severity.Error);
+    }
+
+    private async Task TestConnection()
+    {
+        if (_settings == null || string.IsNullOrWhiteSpace(_settings.TestMobileNumber))
+        {
+            Snackbar.Add("Please enter test mobile number", Severity.Warning);
+            return;
+        }
+
+        var testNotification = new PendingWhatsAppNotification
+        {
+            EmployeeId = 0,
+            StudentName = "Test Student",
+            ParentMobileNo = _settings.TestMobileNumber,
+            PunchTime = DateTime.Now,
+            PunchDirection = "in",
+            BranchName = "CSM Tutorial",
+            CourseName = "Test Course"
+        };
+
+        var success = await WhatsAppService.SendWhatsAppMessageAsync(testNotification, "checkin");
+
+        if (success)
+            Snackbar.Add("Test message sent successfully!", Severity.Success);
+        else
+            Snackbar.Add("Failed to send test message", Severity.Error);
+    }
+} *@

@@ -1,0 +1,63 @@
+﻿@* Components/PendingMessagesList.razor *@
+@using CSMTutorial.Models
+
+<MudPaper Elevation="0">
+    @if (IsLoading)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else if (!Messages.Any())
+    {
+        <MudAlert Severity="Severity.Info">No pending messages</MudAlert>
+    }
+    else
+    {
+        <div class="d-flex justify-space-between mb-3">
+            <MudText Typo="Typo.body1">
+                <strong>@Messages.Count</strong> pending messages
+            </MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Success"
+                       Size="Size.Small" OnClick="() => OnSendAll.InvokeAsync(Messages)"
+                       StartIcon="@Icons.Material.Filled.Send">
+                Send All
+            </MudButton>
+        </div>
+
+        <MudTable T="PendingMessage" Items="Messages" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>Student</MudTh>
+                <MudTh>Parent</MudTh>
+                <MudTh>Mobile</MudTh>
+                <MudTh>Time</MudTh>
+                <MudTh>Branch</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate Context="msg">
+                <MudTd>@msg.StudentName</MudTd>
+                <MudTd>@msg.ParentName</MudTd>
+                <MudTd>@msg.ParentMobile</MudTd>
+                <MudTd>@msg.PunchTime.ToString("hh:mm tt")</MudTd>
+                <MudTd>@msg.BranchName</MudTd>
+                <MudTd>
+                    <MudButtonGroup Size="Size.Small" Variant="Variant.Outlined">
+                        <MudIconButton Icon="@Icons.Custom.Brands.WhatsApp" Color="Color.Success"
+                                       OnClick="() => OnSendClicked.InvokeAsync(msg)"
+                                       Title="Send WhatsApp" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Done" Color="Color.Primary"
+                                       OnClick="() => OnMarkAsSent.InvokeAsync(msg)"
+                                       Title="Mark as Sent" />
+                    </MudButtonGroup>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public List<PendingMessage> Messages { get; set; } = new();
+    [Parameter] public string MessageType { get; set; } = "";
+    [Parameter] public EventCallback<PendingMessage> OnSendClicked { get; set; }
+    [Parameter] public EventCallback<PendingMessage> OnMarkAsSent { get; set; }
+    [Parameter] public EventCallback<List<PendingMessage>> OnSendAll { get; set; }
+    [Parameter] public bool IsLoading { get; set; }
+}

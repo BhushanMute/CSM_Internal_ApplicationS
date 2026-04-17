@@ -1,0 +1,508 @@
+﻿@page "/login"
+@page "/"
+@rendermode InteractiveServer
+@using CSMTutorial.Auth
+@using CSMTutorial.Components.Layout
+@using CSMTutorial.Models
+@using CSMTutorial.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@layout LoginLayout
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject ILogger<Login> Logger
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Login - CSM Tutorial</PageTitle>
+
+<div class="login-page-container">
+    <div class="login-card">
+        <div class="login-header text-center mb-5">
+            <div class="icon-circle mb-4 mx-auto">
+                <i class="bi bi-file-earmark-excel-fill text-primary display-5"></i>
+            </div>
+            <h2 class="fw-bold text-dark mb-2">Welcome Back</h2>
+            <p class="text-muted">Sign in to continue to your workspace</p>
+        </div>
+
+        @if (showRegistrationSuccess)
+        {
+            <div class="alert alert-modern alert-success d-flex align-items-center toast-top-right shadow" role="alert">
+                <div class="alert-icon-wrapper success-bg me-3" style="width: 32px; height: 32px;">
+                    <i class="bi bi-check-lg text-success"></i>
+                </div>
+                <div>
+                    <h6 class="alert-heading mb-0 fw-bold" style="font-size: 0.9rem;">Registration Successful!</h6>
+                    <small class="mb-0 text-success-emphasis" style="font-size: 0.75rem;">Please login with your new credentials.</small>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-modern alert-danger d-flex align-items-center toast-top-right shadow" role="alert">
+                <div class="alert-icon-wrapper danger-bg me-3" style="width: 32px; height: 32px;">
+                    <i class="bi bi-exclamation-triangle-fill text-danger"></i>
+                </div>
+                <div class="text-danger-emphasis fw-medium" style="font-size: 0.85rem;">@errorMessage</div>
+            </div>
+        }
+
+        <div class="login-form">
+            <!-- Username Input -->
+            <div class="form-floating mb-4 position-relative">
+                <i class="bi bi-person input-icon"></i>
+                <input type="text"
+                       id="username"
+                       class="form-control custom-input ps-5"
+                       @bind="username"
+                       @bind:event="oninput"
+                       placeholder="Username"
+                       disabled="@isLoading" />
+                <label for="username" class="ms-4 text-muted">Username</label>
+                @if (showUsernameError)
+                {
+                    <div class="text-danger small mt-2 fw-medium px-2"><i class="bi bi-info-circle me-1"></i>Username is required</div>
+                }
+            </div>
+
+            <!-- Password Input -->
+            <div class="form-floating mb-4 position-relative">
+                <i class="bi bi-lock input-icon"></i>
+                <input type="@(showPassword ? "text" : "password")"
+                       id="password"
+                       class="form-control custom-input ps-5"
+                       @bind="password"
+                       @bind:event="oninput"
+                       @onkeypress="HandleKeyPress"
+                       placeholder="Password"
+                       disabled="@isLoading" />
+                <label for="password" class="ms-4 text-muted">Password</label>
+                <button type="button"
+                        class="btn btn-link toggle-password-btn text-muted"
+                        @onclick="TogglePasswordVisibility"
+                        tabindex="-1"
+                        disabled="@isLoading">
+                    <i class="bi @(showPassword ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
+                </button>
+                @if (showPasswordError)
+                {
+                    <div class="text-danger small mt-2 fw-medium px-2"><i class="bi bi-info-circle me-1"></i>Password is required</div>
+                }
+            </div>
+
+            <!-- Options -->
+            <div class="d-flex justify-content-between align-items-center mb-5 px-1">
+                <div class="form-check custom-checkbox">
+                    <input class="form-check-input" type="checkbox" id="rememberMe" @bind="rememberMe">
+                    <label class="form-check-label small fw-medium text-muted user-select-none" for="rememberMe">
+                        Remember me
+                    </label>
+                </div>
+                <a href="/forgot-password" class="small text-decoration-none fw-bold text-primary hover-opacity">Forgot Password?</a>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="button"
+                    class="btn btn-primary btn-lg w-100 py-3 mb-4 custom-btn d-flex justify-content-center align-items-center gap-2"
+                    @onclick="HandleLogin"
+                    disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                    <span>Authenticating...</span>
+                }
+                else
+                {
+                    <span>Sign In</span>
+                    <i class="bi bi-arrow-right fs-5"></i>
+                }
+            </button>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-2">
+            <p class="text-muted mb-0 fw-medium">
+                Don't have an account?
+                <a href="/register" class="text-primary fw-bold text-decoration-none ms-1 hover-opacity">Create one now</a>
+            </p>
+        </div>
+
+        <!-- Demo Hint -->
+        <div class="demo-hint mt-5 text-center">
+            <div class="d-inline-flex align-items-center gap-2">
+                <i class="bi bi-lightbulb-fill text-warning"></i>
+                <span class="small text-muted fw-medium">Demo access:</span>
+                <span class="badge bg-white text-dark border px-2 py-1 shadow-sm">admin</span>
+                <span class="small text-muted fw-medium">/</span>
+                <span class="badge bg-white text-dark border px-2 py-1 shadow-sm">Admin@123</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Main Layout */
+    .login-page-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #f3f8ff 0%, #e2eafc 100%);
+        padding: 2rem 1rem;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    /* Card Styling */
+    .login-card {
+        background: #ffffff;
+        border-radius: 24px;
+        padding: 3.5rem 3rem;
+        width: 100%;
+        max-width: 480px;
+        box-shadow: 0 20px 40px rgba(18, 38, 63, 0.08), 0 1px 3px rgba(18, 38, 63, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @@keyframes slideUpFade {
+        from
+
+    {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    }
+
+    /* Header & Icon */
+    .icon-circle {
+        width: 80px;
+        height: 80px;
+        background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 8px 20px rgba(13, 110, 253, 0.15);
+        position: relative;
+    }
+
+        .icon-circle::after {
+            content: '';
+            position: absolute;
+            inset: -6px;
+            border-radius: 50%;
+            border: 2px dashed rgba(13, 110, 253, 0.2);
+        }
+
+    /* Inputs */
+    .custom-input {
+        border-radius: 16px;
+        border: 2px solid #eef2f6;
+        background-color: #f8fafc;
+        height: calc(3.8rem + 2px);
+        font-size: 1rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        padding-right: 3rem;
+    }
+
+        .custom-input:focus {
+            background-color: #ffffff;
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.12);
+        }
+
+    .input-icon {
+        position: absolute;
+        top: 50%;
+        left: 1.25rem;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        font-size: 1.25rem;
+        z-index: 4;
+        transition: color 0.3s ease;
+    }
+
+    .custom-input:focus ~ .input-icon,
+    .custom-input:focus ~ label {
+        color: #0d6efd !important;
+    }
+
+    .form-floating > label {
+        padding: 1.15rem 0.75rem;
+        font-weight: 500;
+    }
+
+    .toggle-password-btn {
+        position: absolute;
+        right: 0.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 5;
+        text-decoration: none;
+        padding: 0.5rem;
+        border-radius: 50%;
+        transition: all 0.2s;
+    }
+
+        .toggle-password-btn:hover {
+            background-color: #f1f5f9;
+            color: #334155 !important;
+        }
+
+    /* Checkbox */
+    .custom-checkbox .form-check-input {
+        width: 1.2em;
+        height: 1.2em;
+        margin-top: 0.15em;
+        border: 2px solid #cbd5e1;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+        .custom-checkbox .form-check-input:checked {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+        }
+
+    /* Button */
+    .custom-btn {
+        border-radius: 16px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        border: none;
+        background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+        box-shadow: 0 8px 20px rgba(13, 110, 253, 0.25);
+        transition: all 0.3s ease;
+    }
+
+        .custom-btn:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 25px rgba(13, 110, 253, 0.35);
+            background: linear-gradient(135deg, #0b5ed7 0%, #084298 100%);
+        }
+
+        .custom-btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+    /* Alerts */
+    .alert-modern {
+        border: none;
+        border-radius: 16px;
+        padding: 1rem 1.25rem;
+        background-color: #f8fafc;
+    }
+
+    .alert-success {
+        background-color: #ecfdf5;
+    }
+
+    .alert-danger {
+        background-color: #fef2f2;
+    }
+
+    .alert-icon-wrapper {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .success-bg {
+        background-color: #d1fae5;
+    }
+
+    .danger-bg {
+        background-color: #fee2e2;
+    }
+
+    /* Toast Notification Styling */
+    .toast-top-right {
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        z-index: 1050;
+        min-width: 250px;
+        max-width: 350px;
+        margin-bottom: 0 !important;
+        padding: 0.75rem 1rem;
+        animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @@keyframes slideInRight {
+        from
+
+    {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+
+    }
+
+    /* Utilities */
+    .hover-opacity {
+        transition: opacity 0.2s ease;
+    }
+
+        .hover-opacity:hover {
+            opacity: 0.8;
+        }
+
+    .demo-hint {
+        background-color: #f8fafc;
+        border-radius: 14px;
+        padding: 12px;
+        border: 1px dashed #cbd5e1;
+    }
+
+    /* Responsive adjustments */
+    @@media (max-width: 576px) {
+        .login-card
+
+    {
+        padding: 2.5rem 1.5rem;
+        border-radius: 20px;
+    }
+
+    }
+</style>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string? Registered { get; set; }
+
+    private string username = string.Empty;
+    private string password = string.Empty;
+    private string errorMessage = string.Empty;
+    private bool isLoading = false;
+    private bool showPassword = false;
+    private bool rememberMe = false;
+    private bool showRegistrationSuccess = false;
+    private bool showUsernameError = false;
+    private bool showPasswordError = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        showRegistrationSuccess = !string.IsNullOrEmpty(Registered) &&
+                                   Registered.Equals("true", StringComparison.OrdinalIgnoreCase);
+
+        try
+        {
+            var currentUser = await AuthService.GetCurrentUserAsync();
+            if (currentUser != null)
+            {
+                Logger.LogInformation("User already authenticated, redirecting to dashboard");
+                NavigateToDashboard();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Error checking authentication state");
+        }
+    }
+
+    private void TogglePasswordVisibility()
+    {
+        showPassword = !showPassword;
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await HandleLogin();
+        }
+    }
+
+    private bool ValidateForm()
+    {
+        showUsernameError = string.IsNullOrWhiteSpace(username);
+        showPasswordError = string.IsNullOrWhiteSpace(password);
+
+        return !showUsernameError && !showPasswordError;
+    }
+
+    private async Task HandleLogin()
+    {
+        if (isLoading) return;
+
+        errorMessage = string.Empty;
+        showRegistrationSuccess = false;
+
+        if (!ValidateForm())
+        {
+            return;
+        }
+
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            Logger.LogInformation("Login attempt for user: {Username}", username);
+
+            var loginModel = new LoginModel
+            {
+                Username = username.Trim(),
+                Password = password
+            };
+
+            var result = await AuthService.LoginAsync(loginModel);
+
+            if (result.Success)
+            {
+                Logger.LogInformation("Login successful for user: {Username}", username);
+
+                if (AuthStateProvider is CustomAuthStateProvider customProvider)
+                {
+                    if (!string.IsNullOrEmpty(result.Token))
+                    {
+                        await customProvider.MarkUserAsAuthenticated(result.Token);
+                    }
+                    customProvider.NotifyAuthenticationStateChanged();
+                }
+
+                NavigateToDashboard();
+            }
+            else
+            {
+                Logger.LogWarning("Login failed for user {Username}: {Message}", username, result.Message);
+                errorMessage = result.Message ?? "Invalid username or password.";
+                password = string.Empty;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Exception during login for user: {Username}", username);
+            errorMessage = "An unexpected error occurred. Please try again.";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void NavigateToDashboard()
+    {
+        var redirectUrl = !string.IsNullOrEmpty(ReturnUrl) ? ReturnUrl : "/dashboard";
+        Navigation.NavigateTo(redirectUrl, forceLoad: true);
+    }
+}

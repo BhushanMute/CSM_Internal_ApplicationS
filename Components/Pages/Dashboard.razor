@@ -1,0 +1,1266 @@
+﻿@page "/dashboard"
+ 
+@using CSMTutorial.Data.Repositories
+@inject IAuthService AuthService
+@inject IEmployeeRepository EmployeeRepository
+@inject NavigationManager Navigation
+@inject ILogger<Dashboard> Logger
+
+<PageTitle>Dashboard</PageTitle>
+
+<div class="dashboard-wrapper">
+    <!-- Animated Background -->
+    <div class="bg-decoration">
+        <div class="bg-circle bg-circle-1"></div>
+        <div class="bg-circle bg-circle-2"></div>
+        <div class="bg-circle bg-circle-3"></div>
+    </div>
+
+    <div class="container-fluid px-4 py-4">
+        <!-- Welcome Header -->
+        <div class="welcome-section mb-4">
+            <div class="row align-items-center">
+                <div class="col-lg-8">
+                    <div class="welcome-content">
+                        <span class="welcome-badge">
+                            <i class="bi bi-stars me-1"></i>
+                            @GetGreeting()
+                        </span>
+                        <h1 class="welcome-title">
+                            Welcome back, <span class="gradient-text">@(AuthService.CurrentUser?.FullName ?? AuthService.CurrentUser?.LoginName ?? "User")</span>! 👋
+                        </h1>
+                        <p class="welcome-subtitle">
+                            Here's what's happening with your employee management system today.
+                        </p>
+                    </div>
+                </div>
+                <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+                    <div class="date-time-card">
+                        <div class="date-icon">
+                            <i class="bi bi-calendar3"></i>
+                        </div>
+                        <div class="date-info">
+                            <span class="date-label">Today</span>
+                            <span class="date-value">@DateTime.Now.ToString("dddd, MMM dd")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <!-- Loading State -->
+            <div class="loading-container">
+                <div class="loading-spinner">
+                    <div class="spinner-ring"></div>
+                    <div class="spinner-ring"></div>
+                    <div class="spinner-ring"></div>
+                </div>
+                <p class="loading-text">Loading your dashboard...</p>
+            </div>
+        }
+        else
+        {
+            <!-- Stats Cards -->
+            <div class="row g-4 mb-4">
+                <!-- Total Employees Card -->
+                <div class="col-md-6 col-xl-3">
+                    <div class="stat-card stat-card-primary">
+                        <div class="stat-card-body">
+                            <div class="stat-icon-wrapper">
+                                <div class="stat-icon">
+                                    <i class="bi bi-people-fill"></i>
+                                </div>
+                                <div class="stat-icon-bg"></div>
+                            </div>
+                            <div class="stat-content">
+                                <span class="stat-label">Total Employees</span>
+                                <h2 class="stat-value">@totalEmployees.ToString("N0")</h2>
+                                <span class="stat-badge stat-badge-success">
+                                    <i class="bi bi-check-circle-fill me-1"></i>Active Records
+                                </span>
+                            </div>
+                        </div>
+                        <div class="stat-card-footer">
+                            <a href="/employees" class="stat-link">
+                                View Details <i class="bi bi-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Role Card -->
+                <div class="col-md-6 col-xl-3">
+                    <div class="stat-card stat-card-success">
+                        <div class="stat-card-body">
+                            <div class="stat-icon-wrapper">
+                                <div class="stat-icon">
+                                    <i class="bi bi-shield-lock-fill"></i>
+                                </div>
+                                <div class="stat-icon-bg"></div>
+                            </div>
+                            <div class="stat-content">
+                                <span class="stat-label">Your Role</span>
+                                <h2 class="stat-value">
+                                    @if (AuthService.IsAdmin)
+                                    {
+                                        <span>Admin</span>
+                                    }
+                                    else
+                                    {
+                                        <span>User</span>
+                                    }
+                                </h2>
+                                @if (AuthService.IsAdmin)
+                                {
+                                    <span class="stat-badge stat-badge-premium">
+                                        <i class="bi bi-patch-check-fill me-1"></i>Full Access
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="stat-badge stat-badge-basic">
+                                        <i class="bi bi-eye-fill me-1"></i>View Access
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                        <div class="stat-card-footer">
+                            <a href="/profile" class="stat-link">
+                                View Profile <i class="bi bi-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Action Card -->
+                <div class="col-md-6 col-xl-3">
+                    <div class="stat-card stat-card-info">
+                        <div class="stat-card-body">
+                            <div class="stat-icon-wrapper">
+                                <div class="stat-icon">
+                                    <i class="bi bi-lightning-charge-fill"></i>
+                                </div>
+                                <div class="stat-icon-bg"></div>
+                            </div>
+                            <div class="stat-content">
+                                <span class="stat-label">Quick Action</span>
+                                <div class="quick-action-btn mt-2">
+                                    @if (AuthService.IsAdmin)
+                                    {
+                                        <a href="/upload" class="btn-action btn-action-primary">
+                                            <i class="bi bi-cloud-arrow-up-fill me-2"></i>Upload Excel
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <a href="/employees" class="btn-action btn-action-info">
+                                            <i class="bi bi-list-columns-reverse me-2"></i>View Employees
+                                        </a>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        <div class="stat-card-footer">
+                            <span class="stat-hint">
+                                <i class="bi bi-info-circle me-1"></i>Suggested for you
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Status Card -->
+                <div class="col-md-6 col-xl-3">
+                    <div class="stat-card stat-card-warning">
+                        <div class="stat-card-body">
+                            <div class="stat-icon-wrapper">
+                                <div class="stat-icon">
+                                    <i class="bi bi-activity"></i>
+                                </div>
+                                <div class="stat-icon-bg"></div>
+                            </div>
+                            <div class="stat-content">
+                                <span class="stat-label">System Status</span>
+                                <div class="status-indicator mt-2">
+                                    <span class="status-dot"></span>
+                                    <span class="status-text">All Systems Operational</span>
+                                </div>
+                                <div class="system-checks mt-2">
+                                    <span class="check-item"><i class="bi bi-check-lg"></i> Database</span>
+                                    <span class="check-item"><i class="bi bi-check-lg"></i> API</span>
+                                    <span class="check-item"><i class="bi bi-check-lg"></i> Auth</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="stat-card-footer">
+                            <span class="stat-hint text-success">
+                                <i class="bi bi-shield-check me-1"></i>100% Uptime
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Links Section -->
+            <div class="quick-links-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i class="bi bi-grid-1x2-fill"></i>
+                        <span>Quick Access</span>
+                    </div>
+                    <div class="section-line"></div>
+                </div>
+
+                <div class="row g-4">
+                    @if (AuthService.IsAdmin)
+                    {
+                        <div class="col-md-6 col-lg-4">
+                            <a href="/upload" class="quick-link-card ql-primary">
+                                <div class="ql-icon-wrapper">
+                                    <i class="bi bi-file-earmark-spreadsheet-fill"></i>
+                                </div>
+                                <div class="ql-content">
+                                    <h5 class="ql-title">Upload Excel</h5>
+                                    <p class="ql-description">Import employee data from Excel spreadsheets</p>
+                                </div>
+                                <div class="ql-arrow">
+                                    <i class="bi bi-arrow-right-circle-fill"></i>
+                                </div>
+                                <div class="ql-badge">Admin Only</div>
+                            </a>
+                        </div>
+                    }
+
+                    <div class="col-md-6 col-lg-4">
+                        <a href="/employees" class="quick-link-card ql-success">
+                            <div class="ql-icon-wrapper">
+                                <i class="bi bi-people-fill"></i>
+                            </div>
+                            <div class="ql-content">
+                                <h5 class="ql-title">Employee List</h5>
+                                <p class="ql-description">View and manage all employee records</p>
+                            </div>
+                            <div class="ql-arrow">
+                                <i class="bi bi-arrow-right-circle-fill"></i>
+                            </div>
+                            <div class="ql-badge">@totalEmployees Records</div>
+                        </a>
+                    </div>
+
+                    <div class="col-md-6 col-lg-4">
+                        <a href="/profile" class="quick-link-card ql-info">
+                            <div class="ql-icon-wrapper">
+                                <i class="bi bi-person-gear"></i>
+                            </div>
+                            <div class="ql-content">
+                                <h5 class="ql-title">My Profile</h5>
+                                <p class="ql-description">Manage your account settings and preferences</p>
+                            </div>
+                            <div class="ql-arrow">
+                                <i class="bi bi-arrow-right-circle-fill"></i>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Info Section -->
+            <div class="row mt-4">
+                <div class="col-lg-6">
+                    <div class="info-card">
+                        <div class="info-card-header">
+                            <h5><i class="bi bi-person-badge me-2"></i>Account Information</h5>
+                        </div>
+                        <div class="info-card-body">
+                            <div class="info-item">
+                                <span class="info-label">Full Name</span>
+                                <span class="info-value">@(AuthService.CurrentUser?.FullName ?? "N/A")</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Username</span>
+                                <span class="info-value">@(AuthService.CurrentUser?.LoginName ?? "N/A")</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Role</span>
+                                <span class="info-value">
+                                    @if (AuthService.IsAdmin)
+                                    {
+                                        <span class="role-tag role-admin">
+                                            <i class="bi bi-shield-fill-check me-1"></i>Administrator
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="role-tag role-user">
+                                            <i class="bi bi-person-fill me-1"></i>Standard User
+                                        </span>
+                                    }
+                                </span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Session</span>
+                                <span class="info-value">
+                                    <span class="session-active">
+                                        <i class="bi bi-circle-fill"></i> Active
+                                    </span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6 mt-4 mt-lg-0">
+                    <div class="info-card">
+                        <div class="info-card-header">
+                            <h5><i class="bi bi-clock-history me-2"></i>Recent Activity</h5>
+                        </div>
+                        <div class="info-card-body">
+                            <div class="activity-item">
+                                <div class="activity-icon activity-login">
+                                    <i class="bi bi-box-arrow-in-right"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <span class="activity-text">Logged in successfully</span>
+                                    <span class="activity-time">Just now</span>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-icon activity-view">
+                                    <i class="bi bi-eye"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <span class="activity-text">Dashboard accessed</span>
+                                    <span class="activity-time">Just now</span>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-icon activity-system">
+                                    <i class="bi bi-gear"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <span class="activity-text">Session started</span>
+                                    <span class="activity-time">@DateTime.Now.ToString("hh:mm tt")</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Footer -->
+    <div class="dashboard-footer">
+        <span>© @DateTime.Now.Year CSM Tutorial. All rights reserved.</span>
+        <span class="version-badge">v2.0</span>
+    </div>
+</div>
+
+
+<style>
+
+    :root {
+        --primary: #6366f1;
+        --primary-light: #818cf8;
+        --primary-dark: #4f46e5;
+        --success: #10b981;
+        --success-light: #34d399;
+        --info: #06b6d4;
+        --info-light: #22d3ee;
+        --warning: #f59e0b;
+        --warning-light: #fbbf24;
+        --danger: #ef4444;
+        --gray-50: #f8fafc;
+        --gray-100: #f1f5f9;
+        --gray-200: #e2e8f0;
+        --gray-300: #cbd5e1;
+        --gray-400: #94a3b8;
+        --gray-500: #64748b;
+        --gray-600: #475569;
+        --gray-700: #334155;
+        --gray-800: #1e293b;
+        --gray-900: #0f172a;
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --radius-xl: 20px;
+        --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    }
+
+    /* ============================================
+           BASE STYLES
+           ============================================ */
+    .dashboard-wrapper {
+        min-height: 100vh;
+        background: linear-gradient(135deg, var(--gray-50) 0%, var(--gray-100) 100%);
+        position: relative;
+        overflow-x: hidden;
+    }
+
+    /* Background Decoration */
+    .bg-decoration {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        overflow: hidden;
+        z-index: 0;
+    }
+
+    .bg-circle {
+        position: absolute;
+        border-radius: 50%;
+        opacity: 0.5;
+        filter: blur(80px);
+    }
+
+    .bg-circle-1 {
+        width: 400px;
+        height: 400px;
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.1) 100%);
+        top: -100px;
+        right: -100px;
+        animation: float1 15s ease-in-out infinite;
+    }
+
+    .bg-circle-2 {
+        width: 300px;
+        height: 300px;
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(6, 182, 212, 0.1) 100%);
+        bottom: 10%;
+        left: -50px;
+        animation: float2 18s ease-in-out infinite;
+    }
+
+    .bg-circle-3 {
+        width: 250px;
+        height: 250px;
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+        top: 50%;
+        right: 20%;
+        animation: float3 20s ease-in-out infinite;
+    }
+
+    @@keyframes float1 {
+        0%, 100% {
+            transform: translate(0, 0);
+        }
+
+        50% {
+            transform: translate(-30px, 30px);
+        }
+    }
+
+    @@keyframes float2 {
+        0%, 100% {
+            transform: translate(0, 0);
+        }
+
+        50% {
+            transform: translate(40px, -20px);
+        }
+    }
+
+    @@keyframes float3 {
+        0%, 100% {
+            transform: translate(0, 0);
+        }
+
+        50% {
+            transform: translate(-20px, 40px);
+        }
+    }
+
+    .container-fluid {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* ============================================
+           WELCOME SECTION
+           ============================================ */
+    .welcome-section {
+        padding: 1.5rem 0;
+    }
+
+    .welcome-badge {
+        display: inline-flex;
+        align-items: center;
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+        color: var(--primary);
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        margin-bottom: 1rem;
+        border: 1px solid rgba(99, 102, 241, 0.2);
+    }
+
+    .welcome-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--gray-800);
+        margin-bottom: 0.5rem;
+    }
+
+    .gradient-text {
+        background: linear-gradient(135deg, var(--primary) 0%, #a855f7 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    .welcome-subtitle {
+        color: var(--gray-500);
+        font-size: 1.1rem;
+        margin-bottom: 0;
+    }
+
+    .date-time-card {
+        display: inline-flex;
+        align-items: center;
+        gap: 1rem;
+        background: white;
+        padding: 1rem 1.5rem;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-md);
+        border: 1px solid var(--gray-100);
+    }
+
+    .date-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.25rem;
+    }
+
+    .date-info {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .date-label {
+        font-size: 0.75rem;
+        color: var(--gray-400);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .date-value {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--gray-800);
+    }
+
+    /* ============================================
+           LOADING STATE
+           ============================================ */
+    .loading-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 5rem 2rem;
+    }
+
+    .loading-spinner {
+        position: relative;
+        width: 80px;
+        height: 80px;
+    }
+
+    .spinner-ring {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border: 4px solid transparent;
+        border-radius: 50%;
+        animation: spin 1.5s linear infinite;
+    }
+
+        .spinner-ring:nth-child(1) {
+            border-top-color: var(--primary);
+            animation-delay: 0s;
+        }
+
+        .spinner-ring:nth-child(2) {
+            border-right-color: var(--success);
+            animation-delay: 0.15s;
+            width: 70%;
+            height: 70%;
+            top: 15%;
+            left: 15%;
+        }
+
+        .spinner-ring:nth-child(3) {
+            border-bottom-color: var(--info);
+            animation-delay: 0.3s;
+            width: 40%;
+            height: 40%;
+            top: 30%;
+            left: 30%;
+        }
+
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .loading-text {
+        margin-top: 1.5rem;
+        color: var(--gray-500);
+        font-size: 1rem;
+    }
+
+    /* ============================================
+           STAT CARDS
+           ============================================ */
+    .stat-card {
+        background: white;
+        border-radius: var(--radius-xl);
+        overflow: hidden;
+        box-shadow: var(--shadow-md);
+        border: 1px solid var(--gray-100);
+        transition: all 0.3s ease;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-xl);
+        }
+
+    .stat-card-body {
+        padding: 1.5rem;
+        flex: 1;
+        display: flex;
+        gap: 1rem;
+    }
+
+    .stat-icon-wrapper {
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .stat-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: var(--radius-lg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        color: white;
+        position: relative;
+        z-index: 1;
+    }
+
+    .stat-icon-bg {
+        position: absolute;
+        width: 56px;
+        height: 56px;
+        border-radius: var(--radius-lg);
+        top: 4px;
+        left: 4px;
+        opacity: 0.3;
+    }
+
+    .stat-card-primary .stat-icon {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+    }
+
+    .stat-card-primary .stat-icon-bg {
+        background: var(--primary);
+    }
+
+    .stat-card-success .stat-icon {
+        background: linear-gradient(135deg, var(--success) 0%, var(--success-light) 100%);
+    }
+
+    .stat-card-success .stat-icon-bg {
+        background: var(--success);
+    }
+
+    .stat-card-info .stat-icon {
+        background: linear-gradient(135deg, var(--info) 0%, var(--info-light) 100%);
+    }
+
+    .stat-card-info .stat-icon-bg {
+        background: var(--info);
+    }
+
+    .stat-card-warning .stat-icon {
+        background: linear-gradient(135deg, var(--warning) 0%, var(--warning-light) 100%);
+    }
+
+    .stat-card-warning .stat-icon-bg {
+        background: var(--warning);
+    }
+
+    .stat-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .stat-label {
+        display: block;
+        font-size: 0.8rem;
+        color: var(--gray-500);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.25rem;
+    }
+
+    .stat-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--gray-800);
+        margin-bottom: 0.5rem;
+        line-height: 1.2;
+    }
+
+    .stat-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+
+    .stat-badge-success {
+        background: rgba(16, 185, 129, 0.1);
+        color: var(--success);
+    }
+
+    .stat-badge-premium {
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
+        color: var(--primary);
+    }
+
+    .stat-badge-basic {
+        background: rgba(100, 116, 139, 0.1);
+        color: var(--gray-500);
+    }
+
+    .stat-card-footer {
+        padding: 0.75rem 1.5rem;
+        background: var(--gray-50);
+        border-top: 1px solid var(--gray-100);
+    }
+
+    .stat-link {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--primary);
+        text-decoration: none;
+        font-size: 0.875rem;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+
+        .stat-link:hover {
+            color: var(--primary-dark);
+        }
+
+        .stat-link i {
+            transition: transform 0.2s ease;
+        }
+
+        .stat-link:hover i {
+            transform: translateX(4px);
+        }
+
+    .stat-hint {
+        font-size: 0.8rem;
+        color: var(--gray-400);
+    }
+
+    /* Quick Action Button */
+    .btn-action {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.625rem 1.25rem;
+        border-radius: var(--radius-md);
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.3s ease;
+    }
+
+    .btn-action-primary {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+
+        .btn-action-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+            color: white;
+        }
+
+    .btn-action-info {
+        background: linear-gradient(135deg, var(--info) 0%, var(--info-light) 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+    }
+
+        .btn-action-info:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(6, 182, 212, 0.4);
+            color: white;
+        }
+
+    /* Status Indicator */
+    .status-indicator {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .status-dot {
+        width: 10px;
+        height: 10px;
+        background: var(--success);
+        border-radius: 50%;
+        animation: pulse-dot 2s infinite;
+        box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+    }
+
+    @@keyframes pulse-dot {
+        0%, 100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        50% {
+            opacity: 0.7;
+            transform: scale(1.1);
+        }
+    }
+
+    .status-text {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--success);
+    }
+
+    .system-checks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .check-item {
+        font-size: 0.75rem;
+        color: var(--gray-500);
+        background: var(--gray-100);
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+    }
+
+        .check-item i {
+            color: var(--success);
+            margin-right: 0.25rem;
+        }
+
+    /* ============================================
+           QUICK LINKS SECTION
+           ============================================ */
+    .quick-links-section {
+        margin-top: 1rem;
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--gray-800);
+        white-space: nowrap;
+    }
+
+        .section-title i {
+            color: var(--primary);
+        }
+
+    .section-line {
+        flex: 1;
+        height: 2px;
+        background: linear-gradient(90deg, var(--gray-200) 0%, transparent 100%);
+        border-radius: 2px;
+    }
+
+    .quick-link-card {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.5rem;
+        background: white;
+        border-radius: var(--radius-xl);
+        text-decoration: none;
+        border: 1px solid var(--gray-100);
+        box-shadow: var(--shadow-sm);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+        .quick-link-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+        }
+
+    .ql-icon-wrapper {
+        width: 60px;
+        height: 60px;
+        border-radius: var(--radius-lg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.75rem;
+        color: white;
+        flex-shrink: 0;
+        transition: transform 0.3s ease;
+    }
+
+    .quick-link-card:hover .ql-icon-wrapper {
+        transform: scale(1.1) rotate(-5deg);
+    }
+
+    .ql-primary .ql-icon-wrapper {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+    }
+
+    .ql-success .ql-icon-wrapper {
+        background: linear-gradient(135deg, var(--success) 0%, var(--success-light) 100%);
+    }
+
+    .ql-info .ql-icon-wrapper {
+        background: linear-gradient(135deg, var(--info) 0%, var(--info-light) 100%);
+    }
+
+    .ql-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .ql-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--gray-800);
+        margin-bottom: 0.25rem;
+    }
+
+    .ql-description {
+        font-size: 0.875rem;
+        color: var(--gray-500);
+        margin-bottom: 0;
+        line-height: 1.4;
+    }
+
+    .ql-arrow {
+        font-size: 1.5rem;
+        color: var(--gray-300);
+        transition: all 0.3s ease;
+    }
+
+    .quick-link-card:hover .ql-arrow {
+        color: var(--primary);
+        transform: translateX(4px);
+    }
+
+    .ql-badge {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background: rgba(99, 102, 241, 0.1);
+        color: var(--primary);
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    /* ============================================
+           INFO CARDS
+           ============================================ */
+    .info-card {
+        background: white;
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-md);
+        border: 1px solid var(--gray-100);
+        overflow: hidden;
+        height: 100%;
+    }
+
+    .info-card-header {
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid var(--gray-100);
+        background: var(--gray-50);
+    }
+
+        .info-card-header h5 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--gray-800);
+            display: flex;
+            align-items: center;
+        }
+
+            .info-card-header h5 i {
+                color: var(--primary);
+            }
+
+    .info-card-body {
+        padding: 1.5rem;
+    }
+
+    .info-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid var(--gray-100);
+    }
+
+        .info-item:last-child {
+            border-bottom: none;
+        }
+
+    .info-label {
+        font-size: 0.875rem;
+        color: var(--gray-500);
+    }
+
+    .info-value {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--gray-800);
+    }
+
+    .role-tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.35rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+
+    .role-admin {
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(251, 191, 36, 0.1) 100%);
+        color: var(--warning);
+    }
+
+    .role-user {
+        background: rgba(100, 116, 139, 0.1);
+        color: var(--gray-500);
+    }
+
+    .session-active {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        color: var(--success);
+        font-weight: 500;
+    }
+
+        .session-active i {
+            font-size: 0.5rem;
+            animation: pulse-dot 2s infinite;
+        }
+
+    /* Activity Items */
+    .activity-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid var(--gray-100);
+    }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+    .activity-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+
+    .activity-login {
+        background: rgba(16, 185, 129, 0.1);
+        color: var(--success);
+    }
+
+    .activity-view {
+        background: rgba(99, 102, 241, 0.1);
+        color: var(--primary);
+    }
+
+    .activity-system {
+        background: rgba(100, 116, 139, 0.1);
+        color: var(--gray-500);
+    }
+
+    .activity-content {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+    }
+
+    .activity-text {
+        font-size: 0.9rem;
+        color: var(--gray-800);
+        font-weight: 500;
+    }
+
+    .activity-time {
+        font-size: 0.8rem;
+        color: var(--gray-400);
+    }
+
+    /* ============================================
+           FOOTER
+           ============================================ */
+    .dashboard-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem 2rem;
+        margin-top: 2rem;
+        border-top: 1px solid var(--gray-200);
+        color: var(--gray-400);
+        font-size: 0.875rem;
+    }
+
+    .version-badge {
+        background: var(--gray-100);
+        color: var(--gray-500);
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    /* ============================================
+           RESPONSIVE DESIGN
+           ============================================ */
+    @@media (max-width: 992px) {
+        .welcome-title {
+            font-size: 1.5rem;
+        }
+
+        .date-time-card {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .dashboard-wrapper {
+            padding-bottom: 1rem;
+        }
+
+        .stat-card-body {
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .stat-icon-wrapper {
+            margin: 0 auto;
+        }
+
+        .quick-link-card {
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .ql-arrow {
+            display: none;
+        }
+
+        .ql-badge {
+            position: static;
+            margin-top: 0.5rem;
+        }
+
+        .dashboard-footer {
+            flex-direction: column;
+            gap: 0.75rem;
+            text-align: center;
+        }
+    }
+</style>
+
+
+@code {
+    private int totalEmployees = 0;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+             
+            Logger.LogInformation("Loading dashboard data for user: {User}",
+               AuthService.CurrentUser?.LoginName ?? "Unknown");
+
+            totalEmployees = await EmployeeRepository.GetTotalCountAsync();
+            Logger.LogInformation("Dashboard loaded successfully. Total employees: {Count}", totalEmployees);
+
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading dashboard data");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+    private string GetGreeting()
+    {
+        var hour = DateTime.Now.Hour;
+        if (hour < 12)
+            return "Good Morning";
+        else if (hour < 18)
+            return "Good Afternoon";
+        else
+            return "Good Evening";
+    }
+}

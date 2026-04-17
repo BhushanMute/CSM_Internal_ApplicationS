@@ -1,0 +1,2329 @@
+﻿@page "/attendance"
+@using CSMTutorial.Models
+@using CSMTutorial.Data.Repositories
+
+@inject IAttendanceRepository AttendanceRepository
+@inject IEmployeeRepository EmployeeRepository
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ILogger<Attendance> Logger
+
+@implements IDisposable
+
+<PageTitle>Attendance Management | HR Portal</PageTitle>
+
+<div class="attendance-page">
+    <!-- Hero Header -->
+    <div class="page-header">
+        <div class="header-background">
+            <div class="bg-shapes">
+                <div class="shape shape-1"></div>
+                <div class="shape shape-2"></div>
+                <div class="shape shape-3"></div>
+            </div>
+        </div>
+        <div class="header-content">
+            <div class="header-left">
+                <div class="header-icon">
+                    <i class="bi bi-calendar-check-fill"></i>
+                </div>
+                <div class="header-text">
+                    <h1>Attendance Management</h1>
+                    <p>Track employee attendance, view reports, and manage time records</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <a href="/attendance/daily" class="btn-daily-report">
+                    <i class="bi bi-calendar-day"></i>
+                    <span>Daily Report</span>
+                </a>
+                <button class="btn-icon-header" @onclick="RefreshData" title="Refresh">
+                    <i class="bi bi-arrow-clockwise @(isLoading ? "spinning" : "")"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="quick-stats">
+        <div class="stat-card">
+            <div class="stat-icon companies">
+                <i class="bi bi-building"></i>
+            </div>
+            <div class="stat-info">
+                <span class="stat-value">@companies.Count</span>
+                <span class="stat-label">Companies</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon departments">
+                <i class="bi bi-diagram-3"></i>
+            </div>
+            <div class="stat-info">
+                <span class="stat-value">@departments.Count</span>
+                <span class="stat-label">Departments</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon employees">
+                <i class="bi bi-people"></i>
+            </div>
+            <div class="stat-info">
+                <span class="stat-value">@employeeCount.ToString("N0")</span>
+                <span class="stat-label">Employees</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon selected">
+                <i class="bi bi-check-circle"></i>
+            </div>
+            <div class="stat-info">
+                <span class="stat-value">@(selectedCompanyId > 0 ? "Active" : "None")</span>
+                <span class="stat-label">Selection</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="filter-section">
+        <div class="filter-header">
+            <div class="filter-title">
+                <i class="bi bi-funnel"></i>
+                <span>Filter Employees</span>
+            </div>
+            @if (HasActiveFilters)
+            {
+                <button class="btn-clear-filters" @onclick="ClearAllFilters">
+                    <i class="bi bi-x-circle"></i>
+                    <span>Clear All</span>
+                </button>
+            }
+        </div>
+
+        <div class="filter-body">
+            <div class="filter-grid">
+                <!-- Company Selector -->
+                <div class="filter-item company">
+                    <label>
+                        <i class="bi bi-building"></i>
+                        Company <span class="required">*</span>
+                    </label>
+                    <div class="select-wrapper">
+                        <select @bind="selectedCompanyId" @bind:after="OnCompanyChanged">
+                            <option value="0">Select Company...</option>
+                            @foreach (var company in companies)
+                            {
+                                <option value="@company.CompanyId">@company.CompanyName</option>
+                            }
+                        </select>
+                        <i class="bi bi-chevron-down select-icon"></i>
+                    </div>
+                    @if (selectedCompanyId > 0)
+                    {
+                        <span class="filter-selected">
+                            <i class="bi bi-check-circle-fill"></i>
+                            @companies.FirstOrDefault(c => c.CompanyId == selectedCompanyId)?.CompanyName
+                        </span>
+                    }
+                </div>
+
+                <!-- Department Selector -->
+                <div class="filter-item department @(selectedCompanyId == 0 ? "disabled" : "")">
+                    <label>
+                        <i class="bi bi-diagram-3"></i>
+                        Department
+                    </label>
+                    <div class="select-wrapper">
+                        <select @bind="selectedDepartmentId" @bind:after="OnDepartmentChanged"
+                                disabled="@(selectedCompanyId == 0)">
+                            <option value="0">All Departments</option>
+                            @foreach (var dept in departments)
+                            {
+                                <option value="@dept.DepartmentId">@dept.DepartmentName</option>
+                            }
+                        </select>
+                        <i class="bi bi-chevron-down select-icon"></i>
+                    </div>
+                    @if (selectedDepartmentId > 0)
+                    {
+                        <span class="filter-selected">
+                            <i class="bi bi-check-circle-fill"></i>
+                            @departments.FirstOrDefault(d => d.DepartmentId == selectedDepartmentId)?.DepartmentName
+                        </span>
+                    }
+                </div>
+
+                <!-- Search Box -->
+                <div class="filter-item search @(selectedCompanyId == 0 ? "disabled" : "")">
+                    <label>
+                        <i class="bi bi-search"></i>
+                        Search Employee
+                    </label>
+                    <div class="search-wrapper">
+                        <i class="bi bi-search search-icon"></i>
+                        <input type="text"
+                               placeholder="Name, Code, Email, Contact..."
+                               @bind="searchTerm"
+                               @bind:event="oninput"
+                               @bind:after="OnSearchChanged"
+                               disabled="@(selectedCompanyId == 0)" />
+                        @if (!string.IsNullOrEmpty(searchTerm))
+                        {
+                            <button class="search-clear" @onclick="ClearSearch">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <!-- Status Filter -->
+                <div class="filter-item status @(selectedCompanyId == 0 ? "disabled" : "")">
+                    <label>
+                        <i class="bi bi-toggle-on"></i>
+                        Status
+                    </label>
+                    <div class="select-wrapper">
+                        <select @bind="selectedStatus" @bind:after="OnStatusChanged"
+                                disabled="@(selectedCompanyId == 0)">
+                            <option value="">All Status</option>
+                            <option value="Active">Active</option>
+                            <option value="Working">Working</option>
+                        </select>
+                        <i class="bi bi-chevron-down select-icon"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Selection Banner -->
+            @if (selectedCompanyId > 0)
+            {
+                <div class="selection-banner">
+                    <div class="banner-content">
+                        <div class="banner-path">
+                            <span class="path-item company">
+                                <i class="bi bi-building"></i>
+                                @companies.FirstOrDefault(c => c.CompanyId == selectedCompanyId)?.CompanyName
+                            </span>
+                            @if (selectedDepartmentId > 0)
+                            {
+                                <i class="bi bi-chevron-right path-separator"></i>
+                                <span class="path-item department">
+                                    <i class="bi bi-diagram-3"></i>
+                                    @departments.FirstOrDefault(d => d.DepartmentId == selectedDepartmentId)?.DepartmentName
+                                </span>
+                            }
+                            @if (!string.IsNullOrEmpty(searchTerm))
+                            {
+                                <i class="bi bi-chevron-right path-separator"></i>
+                                <span class="path-item search">
+                                    <i class="bi bi-search"></i>
+                                    "@searchTerm"
+                                </span>
+                            }
+                        </div>
+                        <div class="banner-count">
+                            <span class="count-value">@employeeCount.ToString("N0")</span>
+                            <span class="count-label">Employees Found</span>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Employee List Section -->
+    <div class="employees-section">
+        @if (selectedCompanyId == 0)
+        {
+            <!-- Empty State - No Company Selected -->
+            <div class="empty-state">
+                <div class="empty-illustration">
+                    <div class="illustration-circle">
+                        <i class="bi bi-building"></i>
+                    </div>
+                    <div class="illustration-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+                <h2>Select a Company to Get Started</h2>
+                <p>Choose a company from the dropdown above to view employees and manage their attendance records.</p>
+                <div class="empty-features">
+                    <div class="feature-item">
+                        <i class="bi bi-1-circle-fill"></i>
+                        <span>Select Company</span>
+                    </div>
+                    <div class="feature-arrow">
+                        <i class="bi bi-arrow-right"></i>
+                    </div>
+                    <div class="feature-item">
+                        <i class="bi bi-2-circle-fill"></i>
+                        <span>Choose Department</span>
+                    </div>
+                    <div class="feature-arrow">
+                        <i class="bi bi-arrow-right"></i>
+                    </div>
+                    <div class="feature-item">
+                        <i class="bi bi-3-circle-fill"></i>
+                        <span>View Attendance</span>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Employee List -->
+            <div class="employees-card">
+                <div class="card-header">
+                    <div class="header-left">
+                        <h2>
+                            <i class="bi bi-people"></i>
+                            Employee Directory
+                        </h2>
+                        <span class="employee-count">@employeeCount.ToString("N0") employees</span>
+                    </div>
+                    <div class="header-right">
+                        <div class="view-options">
+                            <button class="@(viewMode == "table" ? "active" : "")"
+                                    @onclick="@(() => viewMode = "table")" title="Table View">
+                                <i class="bi bi-list-ul"></i>
+                            </button>
+                            <button class="@(viewMode == "grid" ? "active" : "")"
+                                    @onclick="@(() => viewMode = "grid")" title="Grid View">
+                                <i class="bi bi-grid-3x3-gap"></i>
+                            </button>
+                        </div>
+                        <div class="page-size-selector">
+                            <label>Show:</label>
+                            <select @bind="pageSize" @bind:after="OnPageSizeChanged">
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    @if (isLoading)
+                    {
+                        <!-- Loading State -->
+                        <div class="loading-state">
+                            <div class="loader">
+                                <div class="loader-spinner">
+                                    <div class="spinner-ring"></div>
+                                    <div class="spinner-ring"></div>
+                                    <div class="spinner-ring"></div>
+                                </div>
+                                <p>Loading employees...</p>
+                            </div>
+                        </div>
+                    }
+                    else if (!employeeList.Any())
+                    {
+                        <!-- No Results -->
+                        <div class="no-results">
+                            <div class="no-results-icon">
+                                <i class="bi bi-search"></i>
+                            </div>
+                            <h3>No Employees Found</h3>
+                            <p>Try adjusting your filters or search criteria</p>
+                            <button class="btn-reset" @onclick="ClearAllFilters">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                                Reset Filters
+                            </button>
+                        </div>
+                    }
+                    else if (viewMode == "table")
+                    {
+                        <!-- Table View -->
+                        <div class="table-wrapper">
+                            <table class="employees-table">
+                                <thead>
+                                    <tr>
+                                        <th class="col-num">#</th>
+                                        <th class="col-employee">Employee</th>
+                                        <th class="col-designation">Designation</th>
+                                        <th class="col-contact">Contact</th>
+                                        <th class="col-company">Company</th>
+                                        <th class="col-department">Department</th>
+                                        <th class="col-status">Status</th>
+                                        <th class="col-action">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @{
+                                        int rowNum = (currentPage - 1) * pageSize;
+                                    }
+                                    @foreach (var emp in employeeList)
+                                    {
+                                        rowNum++;
+                                        <tr class="employee-row" @onclick="@(() => ViewEmployeeAttendance(emp.EmployeeId))">
+                                            <td class="col-num">@rowNum</td>
+                                            <td class="col-employee">
+                                                <div class="employee-info">
+                                                    <div class="employee-avatar @GetAvatarColor(emp.EmployeeName)">
+                                                        @GetInitials(emp.EmployeeName)
+                                                    </div>
+                                                    <div class="employee-details">
+                                                        <span class="employee-name">@emp.EmployeeName</span>
+                                                        <span class="employee-code">
+                                                            <i class="bi bi-fingerprint"></i>
+                                                            @emp.EmployeeCode
+                                                        </span>
+                                                        @if (!string.IsNullOrEmpty(emp.Email))
+                                                        {
+                                                            <span class="employee-email">
+                                                                <i class="bi bi-envelope"></i>
+                                                                @emp.Email
+                                                            </span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="col-designation">
+                                                @if (!string.IsNullOrEmpty(emp.Designation))
+                                                {
+                                                    <span class="designation-badge">
+                                                        <i class="bi bi-briefcase"></i>
+                                                        @emp.Designation
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="no-data">—</span>
+                                                }
+                                            </td>
+                                            <td class="col-contact">
+                                                @if (!string.IsNullOrEmpty(emp.ContactNo))
+                                                {
+                                                    <span class="contact-info">
+                                                        <i class="bi bi-telephone"></i>
+                                                        @emp.ContactNo
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="no-data">—</span>
+                                                }
+                                            </td>
+                                            <td class="col-company">
+                                                <span class="company-badge">
+                                                    <i class="bi bi-building"></i>
+                                                    @(emp.CompanyName ?? "—")
+                                                </span>
+                                            </td>
+                                            <td class="col-department">
+                                                <span class="department-badge">
+                                                    <i class="bi bi-diagram-3"></i>
+                                                    @(emp.DepartmentName ?? "—")
+                                                </span>
+                                            </td>
+                                            <td class="col-status">
+                                                <span class="status-badge @(emp.Status == "Active" ? "active" : "Working")">
+                                                    <span class="status-dot"></span>
+                                                    @(emp.Status ?? "Unknown")
+                                                </span>
+                                            </td>
+                                            <td class="col-action">
+                                                <button class="btn-attendance"
+                                                        @onclick:stopPropagation="true"
+                                                        @onclick="@(() => ViewEmployeeAttendance(emp.EmployeeId))"
+                                                        title="View Attendance">
+                                                    <i class="bi bi-calendar-check"></i>
+                                                    <span>Attendance</span>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Grid View -->
+                        <div class="employees-grid">
+                            @foreach (var emp in employeeList)
+                            {
+                                <div class="employee-card" @onclick="@(() => ViewEmployeeAttendance(emp.EmployeeId))">
+                                    <div class="card-top">
+                                        <div class="employee-avatar large @GetAvatarColor(emp.EmployeeName)">
+                                            @GetInitials(emp.EmployeeName)
+                                        </div>
+                                        <span class="status-indicator @(emp.Status == "Active" ? "active" : "Working")"></span>
+                                    </div>
+                                    <div class="card-content">
+                                        <h3 class="employee-name">@emp.EmployeeName</h3>
+                                        <span class="employee-code">@emp.EmployeeCode</span>
+                                        @if (!string.IsNullOrEmpty(emp.Designation))
+                                        {
+                                            <span class="employee-designation">@emp.Designation</span>
+                                        }
+                                        <div class="employee-org">
+                                            <span class="company">
+                                                <i class="bi bi-building"></i>
+                                                @(emp.CompanyName ?? "—")
+                                            </span>
+                                            <span class="department">
+                                                <i class="bi bi-diagram-3"></i>
+                                                @(emp.DepartmentName ?? "—")
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="card-footer">
+                                        <button class="btn-view-attendance"
+                                                @onclick:stopPropagation="true"
+                                                @onclick="@(() => ViewEmployeeAttendance(emp.EmployeeId))">
+                                            <i class="bi bi-calendar-check"></i>
+                                            View Attendance
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <!-- Pagination -->
+                @if (totalPages > 1 && employeeList.Any())
+                {
+                    <div class="card-pagination">
+                        <div class="pagination-info">
+                            Showing <strong>@((currentPage - 1) * pageSize + 1)</strong> to
+                            <strong>@Math.Min(currentPage * pageSize, employeeCount)</strong> of
+                            <strong>@employeeCount.ToString("N0")</strong> employees
+                        </div>
+                        <div class="pagination-controls">
+                            <button class="page-btn"
+                                    disabled="@(currentPage == 1)"
+                                    @onclick="@(() => GoToPage(1))"
+                                    title="First Page">
+                                <i class="bi bi-chevron-double-left"></i>
+                            </button>
+                            <button class="page-btn"
+                                    disabled="@(currentPage == 1)"
+                                    @onclick="@(() => GoToPage(currentPage - 1))"
+                                    title="Previous Page">
+                                <i class="bi bi-chevron-left"></i>
+                            </button>
+
+                            <div class="page-numbers">
+                                @foreach (var pageNumber in GetVisiblePages())
+                                {
+                                    <button class="page-num @(pageNumber == currentPage ? "active" : "")"
+                                            @onclick="@(() => GoToPage(pageNumber))">
+                                        @pageNumber
+                                    </button>
+                                }
+                            </div>
+
+                            <button class="page-btn"
+                                    disabled="@(currentPage == totalPages)"
+                                    @onclick="@(() => GoToPage(currentPage + 1))"
+                                    title="Next Page">
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
+                            <button class="page-btn"
+                                    disabled="@(currentPage == totalPages)"
+                                    @onclick="@(() => GoToPage(totalPages))"
+                                    title="Last Page">
+                                <i class="bi bi-chevron-double-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<!-- ============================================
+     STYLES
+     ============================================ -->
+<style>
+    /* ==========================================
+           CSS VARIABLES
+           ========================================== */
+    :root {
+        --primary: #6366f1;
+        --primary-dark: #4f46e5;
+        --primary-light: #a5b4fc;
+        --primary-bg: #eef2ff;
+        --success: #10b981;
+        --success-dark: #059669;
+        --success-light: #d1fae5;
+        --danger: #ef4444;
+        --danger-light: #fee2e2;
+        --warning: #f59e0b;
+        --warning-light: #fef3c7;
+        --info: #3b82f6;
+        --info-light: #dbeafe;
+        --purple: #8b5cf6;
+        --purple-light: #ede9fe;
+        --pink: #ec4899;
+        --pink-light: #fce7f3;
+        --teal: #14b8a6;
+        --teal-light: #ccfbf1;
+        --orange: #f97316;
+        --orange-light: #ffedd5;
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-200: #e5e7eb;
+        --gray-300: #d1d5db;
+        --gray-400: #9ca3af;
+        --gray-500: #6b7280;
+        --gray-600: #4b5563;
+        --gray-700: #374151;
+        --gray-800: #1f2937;
+        --gray-900: #111827;
+        --radius-sm: 6px;
+        --radius: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-2xl: 24px;
+        --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+        --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    }
+
+    /* ==========================================
+           PAGE LAYOUT
+           ========================================== */
+    .attendance-page {
+        padding: 24px;
+        background: linear-gradient(180deg, var(--gray-50) 0%, #ffffff 100%);
+        min-height: 100vh;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    /* ==========================================
+           PAGE HEADER
+           ========================================== */
+    .page-header {
+        position: relative;
+        background: white;
+        border-radius: var(--radius-xl);
+        overflow: hidden;
+        margin-bottom: 24px;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .header-background {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 100%;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 50%, var(--pink) 100%);
+        overflow: hidden;
+    }
+
+    .bg-shapes {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+    }
+
+    .shape {
+        position: absolute;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .shape-1 {
+        width: 200px;
+        height: 200px;
+        top: -50px;
+        right: 10%;
+        animation: float 8s ease-in-out infinite;
+    }
+
+    .shape-2 {
+        width: 150px;
+        height: 150px;
+        bottom: -30px;
+        right: 30%;
+        animation: float 6s ease-in-out infinite reverse;
+    }
+
+    .shape-3 {
+        width: 100px;
+        height: 100px;
+        top: 20%;
+        right: 5%;
+        animation: float 10s ease-in-out infinite;
+    }
+
+    @@keyframes float {
+        0%, 100%
+
+    {
+        transform: translateY(0) rotate(0deg);
+    }
+
+    50% {
+        transform: translateY(-20px) rotate(5deg);
+    }
+
+    }
+
+    .header-content {
+        position: relative;
+        padding: 32px 40px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 20px;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+    }
+
+    .header-icon {
+        width: 64px;
+        height: 64px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: var(--radius-lg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(10px);
+    }
+
+        .header-icon i {
+            font-size: 32px;
+            color: white;
+        }
+
+    .header-text h1 {
+        font-size: 28px;
+        font-weight: 700;
+        color: white;
+        margin: 0;
+        letter-spacing: -0.5px;
+    }
+
+    .header-text p {
+        color: rgba(255, 255, 255, 0.85);
+        margin: 6px 0 0;
+        font-size: 15px;
+    }
+
+    .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .btn-daily-report {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 24px;
+        background: white;
+        border: none;
+        border-radius: var(--radius);
+        color: var(--primary);
+        font-weight: 600;
+        font-size: 14px;
+        text-decoration: none;
+        transition: all 0.2s;
+        box-shadow: var(--shadow);
+    }
+
+        .btn-daily-report:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            color: var(--primary-dark);
+        }
+
+        .btn-daily-report i {
+            font-size: 18px;
+        }
+
+    .btn-icon-header {
+        width: 48px;
+        height: 48px;
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        border-radius: var(--radius);
+        color: white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        transition: all 0.2s;
+        backdrop-filter: blur(10px);
+    }
+
+        .btn-icon-header:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-icon-header .spinning {
+            animation: spin 1s linear infinite;
+        }
+
+    @@keyframes spin {
+        to
+
+    {
+        transform: rotate(360deg);
+    }
+
+    }
+
+    /* ==========================================
+           QUICK STATS
+           ========================================== */
+    .quick-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    @@media (max-width: 1024px) {
+        .quick-stats
+
+    {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    }
+
+    @@media (max-width: 480px) {
+        .quick-stats
+
+    {
+        grid-template-columns: 1fr;
+    }
+
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        box-shadow: var(--shadow);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+    .stat-icon {
+        width: 52px;
+        height: 52px;
+        border-radius: var(--radius);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+    }
+
+        .stat-icon.companies {
+            background: var(--primary-bg);
+            color: var(--primary);
+        }
+
+        .stat-icon.departments {
+            background: var(--purple-light);
+            color: var(--purple);
+        }
+
+        .stat-icon.employees {
+            background: var(--success-light);
+            color: var(--success);
+        }
+
+        .stat-icon.selected {
+            background: var(--info-light);
+            color: var(--info);
+        }
+
+    .stat-info {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .stat-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--gray-900);
+        line-height: 1;
+    }
+
+    .stat-label {
+        font-size: 13px;
+        color: var(--gray-500);
+        margin-top: 4px;
+    }
+
+    /* ==========================================
+           FILTER SECTION
+           ========================================== */
+    .filter-section {
+        background: white;
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow);
+        margin-bottom: 24px;
+        overflow: hidden;
+    }
+
+    .filter-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 18px 24px;
+        border-bottom: 1px solid var(--gray-100);
+        background: var(--gray-50);
+    }
+
+    .filter-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--gray-800);
+    }
+
+        .filter-title i {
+            color: var(--primary);
+            font-size: 18px;
+        }
+
+    .btn-clear-filters {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        background: var(--danger-light);
+        border: none;
+        border-radius: var(--radius);
+        color: var(--danger);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .btn-clear-filters:hover {
+            background: var(--danger);
+            color: white;
+        }
+
+    .filter-body {
+        padding: 24px;
+    }
+
+    .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+    }
+
+    @@media (max-width: 1200px) {
+        .filter-grid
+
+    {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    }
+
+    @@media (max-width: 640px) {
+        .filter-grid
+
+    {
+        grid-template-columns: 1fr;
+    }
+
+    }
+
+    .filter-item {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+        .filter-item.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .filter-item label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--gray-600);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+            .filter-item label i {
+                color: var(--primary);
+                font-size: 14px;
+            }
+
+            .filter-item label .required {
+                color: var(--danger);
+            }
+
+    .select-wrapper {
+        position: relative;
+    }
+
+        .select-wrapper select {
+            width: 100%;
+            appearance: none;
+            padding: 12px 40px 12px 14px;
+            border: 1px solid var(--gray-200);
+            border-radius: var(--radius);
+            font-size: 14px;
+            color: var(--gray-800);
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+            .select-wrapper select:focus {
+                outline: none;
+                border-color: var(--primary);
+                box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+            }
+
+        .select-wrapper .select-icon {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--gray-400);
+            font-size: 14px;
+            pointer-events: none;
+        }
+
+    .filter-selected {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--success);
+        margin-top: 4px;
+    }
+
+    .search-wrapper {
+        position: relative;
+    }
+
+        .search-wrapper input {
+            width: 100%;
+            padding: 12px 40px 12px 40px;
+            border: 1px solid var(--gray-200);
+            border-radius: var(--radius);
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+            .search-wrapper input:focus {
+                outline: none;
+                border-color: var(--primary);
+                box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+            }
+
+        .search-wrapper .search-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--gray-400);
+            font-size: 16px;
+        }
+
+        .search-wrapper .search-clear {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 24px;
+            height: 24px;
+            background: var(--gray-200);
+            border: none;
+            border-radius: 50%;
+            color: var(--gray-600);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+            .search-wrapper .search-clear:hover {
+                background: var(--danger);
+                color: white;
+            }
+
+    /* Selection Banner */
+    .selection-banner {
+        margin-top: 20px;
+        padding: 16px 20px;
+        background: linear-gradient(135deg, var(--primary-bg) 0%, var(--purple-light) 100%);
+        border-radius: var(--radius);
+        border-left: 4px solid var(--primary);
+    }
+
+    .banner-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .banner-path {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .path-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: white;
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+        font-weight: 500;
+        box-shadow: var(--shadow-sm);
+    }
+
+        .path-item.company {
+            color: var(--primary);
+        }
+
+        .path-item.department {
+            color: var(--purple);
+        }
+
+        .path-item.search {
+            color: var(--info);
+        }
+
+    .path-separator {
+        color: var(--gray-400);
+        font-size: 12px;
+    }
+
+    .banner-count {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+    }
+
+    .count-value {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--primary);
+        line-height: 1;
+    }
+
+    .count-label {
+        font-size: 12px;
+        color: var(--gray-500);
+    }
+
+    /* ==========================================
+           EMPLOYEES SECTION
+           ========================================== */
+    .employees-section {
+        /* Container for employee list or empty state */
+    }
+
+    /* Empty State */
+    .empty-state {
+        background: white;
+        border-radius: var(--radius-xl);
+        padding: 80px 40px;
+        text-align: center;
+        box-shadow: var(--shadow);
+    }
+
+    .empty-illustration {
+        margin-bottom: 32px;
+    }
+
+    .illustration-circle {
+        width: 120px;
+        height: 120px;
+        background: linear-gradient(135deg, var(--primary-bg) 0%, var(--purple-light) 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+        animation: pulse-scale 2s ease-in-out infinite;
+    }
+
+    @@keyframes pulse-scale {
+        0%, 100%
+
+    {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+
+    }
+
+    .illustration-circle i {
+        font-size: 48px;
+        color: var(--primary);
+    }
+
+    .illustration-dots {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+    }
+
+        .illustration-dots span {
+            width: 8px;
+            height: 8px;
+            background: var(--primary-light);
+            border-radius: 50%;
+            animation: bounce-dots 1.4s ease-in-out infinite;
+        }
+
+            .illustration-dots span:nth-child(2) {
+                animation-delay: 0.2s;
+            }
+
+            .illustration-dots span:nth-child(3) {
+                animation-delay: 0.4s;
+            }
+
+    @@keyframes bounce-dots {
+        0%, 80%, 100%
+
+    {
+        transform: translateY(0);
+    }
+
+    40% {
+        transform: translateY(-10px);
+    }
+
+    }
+
+    .empty-state h2 {
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--gray-800);
+        margin: 0 0 12px;
+    }
+
+    .empty-state p {
+        font-size: 15px;
+        color: var(--gray-500);
+        max-width: 500px;
+        margin: 0 auto 32px;
+    }
+
+    .empty-features {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .feature-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        background: var(--gray-50);
+        border-radius: var(--radius);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--gray-700);
+    }
+
+        .feature-item i {
+            color: var(--primary);
+            font-size: 18px;
+        }
+
+    .feature-arrow {
+        color: var(--gray-400);
+    }
+
+    /* Employees Card */
+    .employees-card {
+        background: white;
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-lg);
+        overflow: hidden;
+    }
+
+        .employees-card .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--gray-100);
+            background: var(--gray-50);
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .employees-card .header-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+            .employees-card .header-left h2 {
+                font-size: 18px;
+                font-weight: 600;
+                color: var(--gray-800);
+                margin: 0;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+                .employees-card .header-left h2 i {
+                    color: var(--primary);
+                }
+
+    .employee-count {
+        padding: 6px 14px;
+        background: var(--primary);
+        color: white;
+        border-radius: 50px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .employees-card .header-right {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .view-options {
+        display: flex;
+        background: white;
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius);
+        overflow: hidden;
+    }
+
+        .view-options button {
+            padding: 10px 14px;
+            border: none;
+            background: transparent;
+            color: var(--gray-500);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 16px;
+        }
+
+            .view-options button:hover {
+                color: var(--gray-700);
+                background: var(--gray-50);
+            }
+
+            .view-options button.active {
+                background: var(--primary);
+                color: white;
+            }
+
+    .page-size-selector {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--gray-600);
+    }
+
+        .page-size-selector select {
+            padding: 8px 12px;
+            border: 1px solid var(--gray-200);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+    .employees-card .card-body {
+        min-height: 400px;
+    }
+
+    /* Loading State */
+    .loading-state {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 80px;
+    }
+
+    .loader {
+        text-align: center;
+    }
+
+    .loader-spinner {
+        position: relative;
+        width: 60px;
+        height: 60px;
+        margin: 0 auto 20px;
+    }
+
+    .spinner-ring {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border: 4px solid transparent;
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+    }
+
+        .spinner-ring:nth-child(1) {
+            animation-delay: -0.45s;
+        }
+
+        .spinner-ring:nth-child(2) {
+            animation-delay: -0.3s;
+            border-top-color: var(--purple);
+        }
+
+        .spinner-ring:nth-child(3) {
+            animation-delay: -0.15s;
+            border-top-color: var(--pink);
+        }
+
+    .loader p {
+        color: var(--gray-500);
+        font-size: 14px;
+    }
+
+    /* No Results */
+    .no-results {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 80px 40px;
+        text-align: center;
+    }
+
+    .no-results-icon {
+        width: 80px;
+        height: 80px;
+        background: var(--gray-100);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+    }
+
+        .no-results-icon i {
+            font-size: 36px;
+            color: var(--gray-400);
+        }
+
+    .no-results h3 {
+        font-size: 20px;
+        color: var(--gray-800);
+        margin: 0 0 8px;
+    }
+
+    .no-results p {
+        color: var(--gray-500);
+        margin: 0 0 20px;
+    }
+
+    .btn-reset {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 24px;
+        background: var(--primary);
+        border: none;
+        border-radius: var(--radius);
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .btn-reset:hover {
+            background: var(--primary-dark);
+        }
+
+    /* ==========================================
+           TABLE VIEW
+           ========================================== */
+    .table-wrapper {
+        overflow-x: auto;
+    }
+
+    .employees-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .employees-table thead {
+            background: var(--gray-50);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .employees-table th {
+            padding: 16px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--gray-500);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--gray-200);
+            white-space: nowrap;
+        }
+
+        .employees-table td {
+            padding: 16px;
+            font-size: 14px;
+            color: var(--gray-700);
+            border-bottom: 1px solid var(--gray-100);
+            vertical-align: middle;
+        }
+
+    .employee-row {
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+        .employee-row:hover {
+            background: rgba(99, 102, 241, 0.04);
+        }
+
+    /* Employee Info */
+    .employee-info {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .employee-avatar {
+        width: 44px;
+        height: 44px;
+        border-radius: var(--radius);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        font-weight: 700;
+        color: white;
+        flex-shrink: 0;
+    }
+
+        .employee-avatar.color-1 {
+            background: linear-gradient(135deg, var(--primary), var(--purple));
+        }
+
+        .employee-avatar.color-2 {
+            background: linear-gradient(135deg, var(--success), var(--teal));
+        }
+
+        .employee-avatar.color-3 {
+            background: linear-gradient(135deg, var(--warning), var(--orange));
+        }
+
+        .employee-avatar.color-4 {
+            background: linear-gradient(135deg, var(--danger), var(--pink));
+        }
+
+        .employee-avatar.color-5 {
+            background: linear-gradient(135deg, var(--info), var(--primary));
+        }
+
+        .employee-avatar.large {
+            width: 64px;
+            height: 64px;
+            font-size: 24px;
+            border-radius: var(--radius-lg);
+        }
+
+    .employee-details {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .employee-name {
+        font-weight: 600;
+        color: var(--gray-800);
+    }
+
+    .employee-code {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--primary);
+        font-family: 'Monaco', 'Consolas', monospace;
+    }
+
+        .employee-code i {
+            font-size: 10px;
+        }
+
+    .employee-email {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--gray-500);
+    }
+
+        .employee-email i {
+            font-size: 10px;
+        }
+
+    .no-data {
+        color: var(--gray-400);
+    }
+
+    /* Badges */
+    .designation-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        background: var(--gray-100);
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        color: var(--gray-700);
+    }
+
+        .designation-badge i {
+            color: var(--gray-400);
+            font-size: 12px;
+        }
+
+    .contact-info {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--gray-600);
+    }
+
+        .contact-info i {
+            color: var(--gray-400);
+        }
+
+    .company-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        background: var(--success-light);
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        color: var(--success-dark);
+    }
+
+    .department-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        background: var(--info-light);
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        color: var(--info);
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 50px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+        .status-badge.active {
+            background: var(--success-light);
+            color: var(--success-dark);
+        }
+
+        .status-badge.Working {
+            background: var(--gray-200);
+            color: var(--gray-600);
+        }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    .status-badge.active .status-dot {
+        animation: pulse 2s ease-in-out infinite;
+    }
+
+    @@keyframes pulse {
+        0%, 100%
+
+    {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+
+    }
+
+    /* Action Button */
+    .btn-attendance {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 16px;
+        background: var(--primary);
+        border: none;
+        border-radius: var(--radius);
+        color: white;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+
+        .btn-attendance:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+    /* ==========================================
+           GRID VIEW
+           ========================================== */
+    .employees-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+        padding: 24px;
+    }
+
+    .employee-card {
+        background: white;
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .employee-card:hover {
+            border-color: var(--primary-light);
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-4px);
+        }
+
+    .card-top {
+        position: relative;
+        padding: 24px;
+        background: linear-gradient(135deg, var(--gray-50), white);
+        display: flex;
+        justify-content: center;
+    }
+
+    .status-indicator {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid white;
+    }
+
+        .status-indicator.active {
+            background: var(--success);
+        }
+
+        .status-indicator.Working {
+            background: var(--gray-400);
+        }
+
+    .card-content {
+        padding: 0 20px 20px;
+        text-align: center;
+    }
+
+        .card-content .employee-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--gray-800);
+            margin: 0 0 4px;
+        }
+
+        .card-content .employee-code {
+            display: inline-flex;
+            padding: 4px 10px;
+            background: var(--primary-bg);
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            color: var(--primary);
+            font-family: monospace;
+            margin-bottom: 8px;
+        }
+
+        .card-content .employee-designation {
+            display: block;
+            font-size: 13px;
+            color: var(--gray-600);
+            margin-bottom: 12px;
+        }
+
+    .employee-org {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+        .employee-org span {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--gray-500);
+        }
+
+    .card-footer {
+        padding: 16px 20px;
+        border-top: 1px solid var(--gray-100);
+        background: var(--gray-50);
+    }
+
+    .btn-view-attendance {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px;
+        background: var(--primary);
+        border: none;
+        border-radius: var(--radius);
+        color: white;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .btn-view-attendance:hover {
+            background: var(--primary-dark);
+        }
+
+    /* ==========================================
+           PAGINATION
+           ========================================== */
+    .card-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 18px 24px;
+        border-top: 1px solid var(--gray-100);
+        background: var(--gray-50);
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .pagination-info {
+        font-size: 14px;
+        color: var(--gray-600);
+    }
+
+        .pagination-info strong {
+            color: var(--gray-800);
+        }
+
+    .pagination-controls {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .page-btn {
+        width: 38px;
+        height: 38px;
+        border: 1px solid var(--gray-200);
+        background: white;
+        border-radius: var(--radius-sm);
+        color: var(--gray-600);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+
+        .page-btn:hover:not(:disabled) {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+    .page-numbers {
+        display: flex;
+        gap: 4px;
+    }
+
+    .page-num {
+        min-width: 38px;
+        height: 38px;
+        padding: 0 12px;
+        border: 1px solid var(--gray-200);
+        background: white;
+        border-radius: var(--radius-sm);
+        color: var(--gray-700);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .page-num:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .page-num.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+    /* ==========================================
+           RESPONSIVE
+           ========================================== */
+    @@media (max-width: 1024px) {
+        .header-content
+
+    {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .header-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .banner-content {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .banner-count {
+        align-items: flex-start;
+    }
+
+    }
+
+    @@media (max-width: 768px) {
+        .attendance-page
+
+    {
+        padding: 16px;
+    }
+
+    .header-content {
+        padding: 24px;
+    }
+
+    .header-icon {
+        width: 52px;
+        height: 52px;
+    }
+
+        .header-icon i {
+            font-size: 26px;
+        }
+
+    .header-text h1 {
+        font-size: 22px;
+    }
+
+    .employees-card .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .employees-card .header-right {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .card-pagination {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .empty-features {
+        flex-direction: column;
+    }
+
+    .feature-arrow {
+        transform: rotate(90deg);
+    }
+
+    }
+
+    @@media (max-width: 480px) {
+        .employees-grid
+
+    {
+        grid-template-columns: 1fr;
+    }
+
+    .pagination-controls {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .page-numbers {
+        display: none;
+    }
+
+    }
+
+    /* ==========================================
+           PRINT STYLES
+           ========================================== */
+    @@media print {
+        .attendance-page
+
+    {
+        padding: 0;
+        background: white;
+    }
+
+    .page-header,
+    .quick-stats,
+    .filter-section,
+    .view-options,
+    .page-size-selector,
+    .card-pagination,
+    .btn-attendance {
+        display: none !important;
+    }
+
+    .employees-card {
+        box-shadow: none;
+        border: 1px solid var(--gray-200);
+    }
+
+    }
+</style>
+
+@* ============================================
+   C# CODE
+   ============================================ *@
+
+@code {
+    // ==========================================
+    // STATE VARIABLES
+    // ==========================================
+    private List<CompanyDropdown> companies = new();
+    private List<DepartmentDropdown> departments = new();
+    private List<EmployeeListItem> employeeList = new();
+
+    private int selectedCompanyId = 0;
+    private int selectedDepartmentId = 0;
+    private string searchTerm = string.Empty;
+    private string selectedStatus = string.Empty;
+
+    private int currentPage = 1;
+    private int pageSize = 20;
+    private int employeeCount = 0;
+    private int totalPages => (int)Math.Ceiling((double)employeeCount / pageSize);
+
+    private bool isLoading = false;
+    private string viewMode = "table"; // "table" or "grid"
+
+    private System.Timers.Timer? searchTimer;
+
+    // Computed property
+    private bool HasActiveFilters => selectedCompanyId > 0 ||
+                                     selectedDepartmentId > 0 ||
+                                     !string.IsNullOrEmpty(searchTerm) ||
+                                     !string.IsNullOrEmpty(selectedStatus);
+
+    // ==========================================
+    // LIFECYCLE METHODS
+    // ==========================================
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            companies = (await EmployeeRepository.GetCompaniesDropdownAsync()).ToList();
+            Logger.LogInformation("Loaded {Count} companies", companies.Count);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading companies");
+        }
+    }
+
+    public void Dispose()
+    {
+        searchTimer?.Stop();
+        searchTimer?.Dispose();
+    }
+
+    // ==========================================
+    // EVENT HANDLERS
+    // ==========================================
+    private async Task OnCompanyChanged()
+    {
+        selectedDepartmentId = 0;
+        departments.Clear();
+        currentPage = 1;
+
+        if (selectedCompanyId > 0)
+        {
+            try
+            {
+                departments = (await EmployeeRepository.GetDepartmentsDropdownAsync(selectedCompanyId)).ToList();
+                Logger.LogInformation("Loaded {Count} departments for company {CompanyId}",
+                    departments.Count, selectedCompanyId);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error loading departments");
+            }
+
+            await LoadEmployees();
+        }
+        else
+        {
+            employeeList.Clear();
+            employeeCount = 0;
+        }
+    }
+
+    private async Task OnDepartmentChanged()
+    {
+        currentPage = 1;
+        await LoadEmployees();
+    }
+
+    private async Task OnStatusChanged()
+    {
+        currentPage = 1;
+        await LoadEmployees();
+    }
+
+    private void OnSearchChanged()
+    {
+        // Debounce search
+        searchTimer?.Stop();
+        searchTimer?.Dispose();
+
+        searchTimer = new System.Timers.Timer(400);
+        searchTimer.Elapsed += async (s, e) =>
+        {
+            searchTimer?.Stop();
+            await InvokeAsync(async () =>
+            {
+                currentPage = 1;
+                await LoadEmployees();
+                StateHasChanged();
+            });
+        };
+        searchTimer.AutoReset = false;
+        searchTimer.Start();
+    }
+
+    private async Task OnPageSizeChanged()
+    {
+        currentPage = 1;
+        await LoadEmployees();
+    }
+
+    private void ClearSearch()
+    {
+        searchTerm = string.Empty;
+        currentPage = 1;
+        _ = LoadEmployees();
+    }
+
+    private async Task ClearAllFilters()
+    {
+        selectedDepartmentId = 0;
+        searchTerm = string.Empty;
+        selectedStatus = string.Empty;
+        currentPage = 1;
+        await LoadEmployees();
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadEmployees();
+    }
+
+    // ==========================================
+    // DATA LOADING
+    // ==========================================
+    private async Task LoadEmployees()
+    {
+        if (selectedCompanyId == 0)
+        {
+            employeeList.Clear();
+            employeeCount = 0;
+            return;
+        }
+
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Load employee list
+            employeeList = (await AttendanceRepository.GetEmployeesByCompanyDepartmentAsync(
+                selectedCompanyId > 0 ? selectedCompanyId : null,
+                selectedDepartmentId > 0 ? selectedDepartmentId : null,
+                string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
+                currentPage,
+                pageSize
+            )).ToList();
+
+            // Load total count
+            employeeCount = await AttendanceRepository.GetEmployeesCountByCompanyDepartmentAsync(
+                selectedCompanyId > 0 ? selectedCompanyId : null,
+                selectedDepartmentId > 0 ? selectedDepartmentId : null,
+                string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm
+            );
+
+            Logger.LogInformation(
+                "Loaded {Count} employees (Total: {Total}) for Company: {CompanyId}, Dept: {DeptId}",
+                employeeList.Count, employeeCount, selectedCompanyId, selectedDepartmentId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading employees");
+            employeeList = new();
+            employeeCount = 0;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    // ==========================================
+    // NAVIGATION
+    // ==========================================
+    private void ViewEmployeeAttendance(int employeeId)
+    {
+        Navigation.NavigateTo($"/attendance/employee/{employeeId}");
+    }
+
+    // ==========================================
+    // PAGINATION
+    // ==========================================
+    private async Task GoToPage(int page)
+    {
+        if (page < 1 || page > totalPages || page == currentPage) return;
+        currentPage = page;
+        await LoadEmployees();
+    }
+
+    private IEnumerable<int> GetVisiblePages()
+    {
+        int start = Math.Max(1, currentPage - 2);
+        int end = Math.Min(totalPages, currentPage + 2);
+
+        // Ensure we always show at least 5 pages if available
+        if (end - start < 4)
+        {
+            if (start == 1)
+                end = Math.Min(totalPages, start + 4);
+            else if (end == totalPages)
+                start = Math.Max(1, end - 4);
+        }
+
+        return Enumerable.Range(start, end - start + 1);
+    }
+
+    // ==========================================
+    // HELPER METHODS
+    // ==========================================
+    private string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length >= 2)
+        {
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+        }
+
+        return name.Length >= 2
+            ? name[..2].ToUpper()
+            : name.ToUpper();
+    }
+
+    private string GetAvatarColor(string? name)
+    {
+        if (string.IsNullOrEmpty(name)) return "color-1";
+
+        // Generate consistent color based on name
+        int hash = name.GetHashCode();
+        int colorIndex = Math.Abs(hash % 5) + 1;
+        return $"color-{colorIndex}";
+    }
+}

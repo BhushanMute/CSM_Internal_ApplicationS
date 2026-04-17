@@ -1,0 +1,435 @@
+﻿@* Pages/WhatsApp/BulkSend.razor *@
+@page "/bulksend"
+@using CSMTutorial.Models
+@using CSMTutorial.Services
+@inject IWhatsAppService WhatsAppService
+@inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
+
+<PageTitle>Bulk WhatsApp Send</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudPaper Class="pa-4">
+        @* Header *@
+        <div class="d-flex align-center gap-3 mb-4">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/whatsappdashboard" />
+            <MudAvatar Color="Color.Success" Size="Size.Large">
+                <MudIcon Icon="@Icons.Material.Filled.Send" />
+            </MudAvatar>
+            <div>
+                <MudText Typo="Typo.h5">Bulk WhatsApp Send</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Send messages to multiple parents at once
+                </MudText>
+            </div>
+        </div>
+
+        <MudAlert Severity="Severity.Info" Class="mb-4" Variant="Variant.Outlined">
+            <MudText Typo="Typo.body2">
+                <strong>How it works:</strong> This will open WhatsApp Web for each selected student. 
+                You need to click "Send" in each WhatsApp window. Messages open with a 2-second delay to prevent browser blocking.
+            </MudText>
+        </MudAlert>
+
+        @* Filters *@
+        <MudGrid Class="mb-4">
+            <MudItem xs="12" md="4">
+                <MudDatePicker @bind-Date="_selectedDate" 
+                               Label="Date" 
+                               Variant="Variant.Outlined"
+                               MaxDate="DateTime.Today" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudSelect @bind-Value="_selectedType" 
+                           Label="Message Type" 
+                           Variant="Variant.Outlined">
+                    <MudSelectItem Value="@("CHECKIN")">Check-In Messages</MudSelectItem>
+                    <MudSelectItem Value="@("CHECKOUT")">Check-Out Messages</MudSelectItem>
+                    <MudSelectItem Value="@("ABSENT")">Absent Alerts</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4" Class="d-flex align-center">
+                <MudButton Variant="Variant.Filled" 
+                           Color="Color.Primary" 
+                           OnClick="LoadMessages"
+                           Disabled="_isLoading"
+                           StartIcon="@Icons.Material.Filled.Refresh" 
+                           FullWidth="true">
+                    @if (_isLoading)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        <span>Loading...</span>
+                    }
+                    else
+                    {
+                        <span>Load Messages</span>
+                    }
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+
+        @if (_messages.Any())
+        {
+            @* Select All / Action Buttons *@
+            <MudPaper Class="pa-3 mb-4 d-flex justify-space-between align-center" Elevation="0" 
+                      Style="background-color: var(--mud-palette-background-grey);">
+                <div class="d-flex align-center gap-2">
+                    <MudCheckBox T="bool" 
+                                 Value="@_selectAll" 
+                                 ValueChanged="ToggleSelectAll" 
+                                 Label="Select All Pending" 
+                                 Color="Color.Primary" />
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        (@_selectedCount of @_pendingCount pending selected)
+                    </MudText>
+                </div>
+                <div class="d-flex gap-2">
+                    <MudButton Variant="Variant.Outlined" 
+                               Color="Color.Success" 
+                               Size="Size.Small"
+                               Disabled="@(_selectedCount == 0 || _isSending)"
+                               StartIcon="@Icons.Custom.Brands.WhatsApp"
+                               OnClick="StartBulkSend">
+                        @if (_isSending)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Sending (@_sentCount/@_selectedCount)...</span>
+                        }
+                        else
+                        {
+                            <span>Send Selected (@_selectedCount)</span>
+                        }
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" 
+                               Color="Color.Primary" 
+                               Size="Size.Small"
+                               Disabled="@(_selectedCount == 0)"
+                               StartIcon="@Icons.Material.Filled.Check"
+                               OnClick="MarkAllAsSent">
+                        Mark as Sent
+                    </MudButton>
+                </div>
+            </MudPaper>
+
+            @* Progress Bar *@
+            @if (_isSending)
+            {
+                <MudProgressLinear Value="@_progressValue" 
+                                   Color="Color.Success" 
+                                   Class="mb-4" 
+                                   Striped="true" 
+                                   Size="Size.Large">
+                    <MudText Typo="Typo.body2">
+                        <b>@_sentCount</b> of <b>@_selectedCount</b> messages sent
+                    </MudText>
+                </MudProgressLinear>
+            }
+
+            @* Messages List *@
+            <MudTable Items="@_messages" 
+                      Hover="true" 
+                      Striped="true" 
+                      Dense="true"
+                      Loading="@_isLoading" 
+                      FixedHeader="true" 
+                      Height="500px">
+                <HeaderContent>
+                    <MudTh Style="width: 50px;"></MudTh>
+                    <MudTh>Student</MudTh>
+                    <MudTh>Parent Mobile</MudTh>
+                    <MudTh>Punch Time</MudTh>
+                    <MudTh>Course</MudTh>
+                    <MudTh>Status</MudTh>
+                    <MudTh>Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>
+                        <MudCheckBox T="bool" 
+                                     Value="@context.IsSelected" 
+                                     ValueChanged="@((value) => ToggleSelection(context, value))"
+                                     Color="Color.Primary"
+                                     Disabled="@context.AlreadySent" />
+                    </MudTd>
+                    <MudTd DataLabel="Student">
+                        <div class="d-flex align-center gap-2">
+                            <MudAvatar Size="Size.Small" Color="@GetGenderColor(context.Gender)">
+                                @context.StudentName?.FirstOrDefault()
+                            </MudAvatar>
+                            <div>
+                                <MudText Typo="Typo.body2">@context.StudentName</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@context.EmployeeCode</MudText>
+                            </div>
+                        </div>
+                    </MudTd>
+                    <MudTd DataLabel="Mobile">
+                        <MudText Typo="Typo.body2">@FormatMobile(context.ParentMobile)</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Time">
+                        <MudText Typo="Typo.body2">@context.PunchTime.ToString("hh:mm tt")</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Course">
+                        <MudText Typo="Typo.caption">@context.CourseName</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Status">
+
+                        @if (context.AlreadySent)
+                        {
+                            <MudChip T="string"
+                                     Size="Size.Small"
+                                     Color="Color.Success"
+                                     Icon="@Icons.Material.Filled.CheckCircle"
+                                     Variant="Variant.Filled">
+                                Sent
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string"
+                                     Size="Size.Small"
+                                     Color="Color.Warning"
+                                     Icon="@Icons.Material.Filled.Schedule"
+                                     Variant="Variant.Outlined">
+                                Pending
+                            </MudChip>
+                        }
+
+                    </MudTd>
+                    <MudTd DataLabel="Actions">
+                        <MudIconButton Icon="@Icons.Custom.Brands.WhatsApp" 
+                                       Color="Color.Success" 
+                                       Size="Size.Small"
+                                       OnClick="() => SendSingle(context)" 
+                                       Title="Send Now" 
+                                       Disabled="@context.AlreadySent" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" 
+                                       Color="Color.Primary" 
+                                       Size="Size.Small"
+                                       OnClick="() => PreviewMessage(context)" 
+                                       Title="Preview" />
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                        No messages found. Select a date and message type, then click "Load Messages".
+                    </MudAlert>
+                </NoRecordsContent>
+            </MudTable>
+        }
+        else if (!_isLoading)
+        {
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
+                Click "Load Messages" to see pending WhatsApp notifications.
+            </MudAlert>
+        }
+    </MudPaper>
+</MudContainer>
+
+@* Preview Dialog *@
+<MudDialog @bind-IsVisible="_showPreview" Options="new DialogOptions { MaxWidth = MaxWidth.Medium }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Message" Class="mr-2"/>
+            Message Preview
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_previewMessage != null)
+        {
+            <MudGrid>
+                <MudItem xs="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Student</MudText>
+                    <MudText Typo="Typo.body1">@_previewMessage.StudentName</MudText>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Parent</MudText>
+                    <MudText Typo="Typo.body1">@_previewMessage.ParentName</MudText>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Mobile Number</MudText>
+                    <MudText Typo="Typo.body1">@_previewMessage.ParentMobile</MudText>
+                </MudItem>
+                <MudItem xs="12" Class="mt-3">
+                    <MudDivider />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">Message Content</MudText>
+                    <MudPaper Class="pa-4" Elevation="0" Style="background-color: #DCF8C6; border-radius: 15px; max-width: 400px;">
+                        <MudText Style="white-space: pre-wrap;">@_previewMessage.FormattedMessage</MudText>
+                        <MudText Typo="Typo.caption" Align="Align.Right" Class="mt-2" Style="color: #667781;">
+                            @DateTime.Now.ToString("hh:mm tt") ✓✓
+                        </MudText>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _showPreview = false">Close</MudButton>
+        <MudButton Color="Color.Success" 
+                   Variant="Variant.Filled" 
+                   StartIcon="@Icons.Custom.Brands.WhatsApp"
+                   OnClick="SendPreviewedMessage">
+            Send This
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<PendingMessage> _messages = new();
+    private DateTime? _selectedDate = DateTime.Today;
+    private string _selectedType = "CHECKIN";
+    private bool _isLoading;
+    private bool _isSending;
+    private bool _selectAll;
+    private int _selectedCount => _messages.Count(m => m.IsSelected);
+    private int _pendingCount => _messages.Count(m => !m.AlreadySent);
+    private int _sentCount;
+    private double _progressValue;
+    
+    private bool _showPreview;
+    private PendingMessage? _previewMessage;
+
+    private async Task LoadMessages()
+    {
+        _isLoading = true;
+        _messages.Clear();
+        
+        try
+        {
+            var messages = _selectedType switch
+            {
+                "CHECKIN" => await WhatsAppService.GetPendingCheckInMessagesAsync(_selectedDate, null),
+                "CHECKOUT" => await WhatsAppService.GetPendingCheckOutMessagesAsync(_selectedDate, null),
+                "ABSENT" => await WhatsAppService.GetAbsentStudentsMessagesAsync(_selectedDate, null),
+                _ => new List<PendingMessage>()
+            };
+            
+            _messages = await WhatsAppService.PrepareMessagesAsync(messages, _selectedType);
+            _selectAll = false;
+            
+            Snackbar.Add($"Loaded {_messages.Count} messages ({_pendingCount} pending)", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading messages: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ToggleSelectAll(bool value)
+    {
+        _selectAll = value;
+        foreach (var msg in _messages.Where(m => !m.AlreadySent))
+        {
+            msg.IsSelected = value;
+        }
+    }
+
+    private void ToggleSelection(PendingMessage message, bool value)
+    {
+        message.IsSelected = value;
+        _selectAll = _messages.Where(m => !m.AlreadySent).All(m => m.IsSelected) && _pendingCount > 0;
+    }
+
+    private async Task StartBulkSend()
+    {
+        var selectedMessages = _messages.Where(m => m.IsSelected).ToList();
+        if (!selectedMessages.Any()) return;
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+            $"This will open {selectedMessages.Count} WhatsApp windows.\n\n" +
+            "Windows will open with a 2-second delay.\n" +
+            "You need to click 'Send' in each window.\n\n" +
+            "Continue?");
+
+        if (!confirmed) return;
+
+        _isSending = true;
+        _sentCount = 0;
+        _progressValue = 0;
+
+        try
+        {
+            foreach (var message in selectedMessages)
+            {
+                await JSRuntime.InvokeVoidAsync("open", message.WhatsAppUrl, "_blank");
+                await WhatsAppService.LogMessageAsync(message, "PENDING", "BulkSend");
+                
+                _sentCount++;
+                _progressValue = (double)_sentCount / selectedMessages.Count * 100;
+                StateHasChanged();
+                
+                await Task.Delay(2000);
+            }
+            
+            Snackbar.Add($"Opened {_sentCount} WhatsApp windows. Please click Send in each window.", Severity.Success);
+            await LoadMessages(); // Reload to update status
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSending = false;
+            _sentCount = 0;
+            _progressValue = 0;
+        }
+    }
+
+    private async Task MarkAllAsSent()
+    {
+        var selectedMessages = _messages.Where(m => m.IsSelected).ToList();
+        if (!selectedMessages.Any()) return;
+
+        foreach (var message in selectedMessages)
+        {
+            await WhatsAppService.LogMessageAsync(message, "SENT", "BulkMark");
+            message.AlreadySent = true;
+            message.IsSelected = false;
+        }
+        
+        Snackbar.Add($"Marked {selectedMessages.Count} messages as sent", Severity.Success);
+    }
+
+    private async Task SendSingle(PendingMessage message)
+    {
+        await JSRuntime.InvokeVoidAsync("open", message.WhatsAppUrl, "_blank");
+        await WhatsAppService.LogMessageAsync(message, "PENDING", "Single");
+        Snackbar.Add($"WhatsApp opened for {message.StudentName}", Severity.Info);
+    }
+
+    private void PreviewMessage(PendingMessage message)
+    {
+        _previewMessage = message;
+        _showPreview = true;
+    }
+
+    private async Task SendPreviewedMessage()
+    {
+        if (_previewMessage != null)
+        {
+            await SendSingle(_previewMessage);
+            _showPreview = false;
+        }
+    }
+
+    private string FormatMobile(string? mobile)
+    {
+        if (string.IsNullOrEmpty(mobile)) return "-";
+        mobile = new string(mobile.Where(char.IsDigit).ToArray());
+        if (mobile.Length == 10)
+            return $"{mobile.Substring(0, 5)}-{mobile.Substring(5)}";
+        return mobile;
+    }
+
+    private Color GetGenderColor(string? gender) => gender?.ToLower() switch
+    {
+        "male" => Color.Primary,
+        "female" => Color.Secondary,
+        _ => Color.Default
+    };
+}

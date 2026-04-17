@@ -1,0 +1,331 @@
+﻿@page "/whatsapphistory"
+
+@using CSMTutorial.Models
+@using CSMTutorial.Services
+
+@inject IWhatsAppService WhatsAppService
+@inject ISnackbar Snackbar
+
+<PageTitle>WhatsApp Message History</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudPaper Class="pa-4">
+
+        <!-- HEADER -->
+        <div class="d-flex justify-space-between align-center mb-4">
+            <div class="d-flex align-center gap-3">
+                <MudAvatar Color="Color.Info" Size="Size.Large">
+                    <MudIcon Icon="@Icons.Material.Filled.History" />
+                </MudAvatar>
+
+                <div>
+                    <MudText Typo="Typo.h5">WhatsApp Message History</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        View all sent and pending messages
+                    </MudText>
+                </div>
+            </div>
+
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                           Color="Color.Primary"
+                           OnClick="LoadHistory" />
+        </div>
+
+        <MudDivider Class="mb-4" />
+
+        <!-- FILTERS -->
+        <MudGrid Class="mb-4">
+
+            <MudItem xs="12" md="3">
+                <MudDatePicker @bind-Date="_fromDate"
+                               Label="From Date"
+                               Variant="Variant.Outlined"
+                               MaxDate="DateTime.Today"
+                               Margin="Margin.Dense" />
+            </MudItem>
+
+            <MudItem xs="12" md="3">
+                <MudDatePicker @bind-Date="_toDate"
+                               Label="To Date"
+                               Variant="Variant.Outlined"
+                               MaxDate="DateTime.Today"
+                               Margin="Margin.Dense" />
+            </MudItem>
+
+            <MudItem xs="12" md="2">
+                <MudSelect T="string" @bind-Value="_statusFilter"
+                           Label="Status"
+                           Clearable="true"
+                           Variant="Variant.Outlined">
+
+                    <MudSelectItem T="string" Value="@("SENT")">Sent</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("PENDING")">Pending</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("FAILED")">Failed</MudSelectItem>
+
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" md="2">
+                <MudSelect T="string" @bind-Value="_messageTypeFilter"
+                           Label="Type"
+                           Clearable="true"
+                           Variant="Variant.Outlined">
+
+                    <MudSelectItem T="string" Value="@("CHECKIN")">Check-In</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("CHECKOUT")">Check-Out</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("ABSENT")">Absent</MudSelectItem>
+
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" md="2">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           OnClick="LoadHistory"
+                           FullWidth="true">
+                    Search
+                </MudButton>
+            </MudItem>
+
+        </MudGrid>
+
+        <!-- TABLE -->
+        <MudTable T="MessageLog"
+                  Items="@_filteredMessages"
+                  Hover="true"
+                  Striped="true"
+                  Dense="true"
+                  Loading="_loading"
+                  FixedHeader="true"
+                  Height="600px"
+                  Filter="FilterFunc">
+
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Messages</MudText>
+                <MudSpacer />
+
+                <MudTextField @bind-Value="_searchString"
+                              Placeholder="Search..."
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Immediate="true"
+                              Clearable="true" />
+            </ToolBarContent>
+
+            <!-- HEADER -->
+            <HeaderContent>
+
+                <MudTh>
+                    <MudTableSortLabel T="MessageLog" SortBy="x => x.CreatedDate">
+                        Date/Time
+                    </MudTableSortLabel>
+                </MudTh>
+
+                <MudTh>
+                    <MudTableSortLabel T="MessageLog" SortBy="x => x.StudentName">
+                        Student
+                    </MudTableSortLabel>
+                </MudTh>
+                 
+                <MudTh>Parent Mobile</MudTh>
+
+                <MudTh>
+                    <MudTableSortLabel T="MessageLog" SortBy="x => x.MessageType">
+                        Type
+                    </MudTableSortLabel>
+                </MudTh>
+
+                <MudTh>
+                    <MudTableSortLabel T="MessageLog" SortBy="x => x.Status">
+                        Status
+                    </MudTableSortLabel>
+                </MudTh>
+
+                <MudTh>Message</MudTh>
+                <MudTh>Actions</MudTh>
+
+            </HeaderContent>
+
+            <!-- ROW -->
+            <RowTemplate Context="item">
+
+                <MudTd>
+                    <MudText>@item.CreatedDate.ToString("dd-MMM-yyyy")</MudText>
+                    <MudText Typo="Typo.caption">@item.CreatedDate.ToString("hh:mm tt")</MudText>
+                </MudTd>
+
+                <MudTd>
+                    <MudText>@item.StudentName</MudText>
+                    <MudText Typo="Typo.caption">ID: @item.EmployeeId</MudText>
+                </MudTd>
+
+                <MudTd>@item.ParentMobile</MudTd>
+
+                <MudTd>
+                    <MudChip T="string" Color="@GetMessageTypeColor(item.MessageType)">
+                        @GetMessageTypeLabel(item.MessageType)
+                    </MudChip>
+                </MudTd>
+
+                <MudTd>
+                    <MudChip T="string" Color="@GetStatusColor(item.Status)">
+                        @item.Status
+                    </MudChip>
+                </MudTd>
+
+                <MudTd>
+                    <MudText Style="max-width:250px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">
+                        @item.MessageText
+                    </MudText>
+                </MudTd>
+
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                   Color="Color.Info"
+                                   OnClick="() => ViewMessage(item)" />
+
+                    <MudIconButton Icon="@Icons.Custom.Brands.WhatsApp"
+                                   Color="Color.Success"
+                                   Href="@item.WhatsAppUrl"
+                                   Target="_blank" />
+                </MudTd>
+
+            </RowTemplate>
+
+        </MudTable>
+
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private List<MessageLog> _messages = new();
+    private List<MessageLog> _filteredMessages => FilterMessages();
+    private DateTime? _fromDate = DateTime.Today.AddDays(-7);
+    private DateTime? _toDate = DateTime.Today;
+    private string? _statusFilter;
+    private string? _messageTypeFilter;
+    private string _searchString = "";
+    private bool _loading = false;
+    private bool _showMessageDialog = false;
+    private MessageLog? _selectedMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadHistory();
+    }
+
+    private async Task LoadHistory()
+    {
+        _loading = true;
+        _messages.Clear();
+
+        try
+        {
+            var result = await WhatsAppService.GetMessageHistoryAsync(
+                _fromDate ?? DateTime.Today.AddDays(-7),
+                _toDate ?? DateTime.Today
+            );
+
+            if (result.Success && result.Data != null)
+            {
+                _messages = result.Data;
+                Snackbar.Add($"Loaded {_messages.Count} messages", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add(result.Message ?? "Failed to load messages", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private List<MessageLog> FilterMessages()
+    {
+        var filtered = _messages.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(_statusFilter))
+        {
+            filtered = filtered.Where(x => x.Status.Equals(_statusFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrEmpty(_messageTypeFilter))
+        {
+            filtered = filtered.Where(x => x.MessageType.Equals(_messageTypeFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return filtered.ToList();
+    }
+
+    private bool FilterFunc(MessageLog message)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString))
+            return true;
+
+        if (message.StudentName?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true)
+            return true;
+
+        if (message.ParentMobile?.Contains(_searchString) == true)
+            return true;
+
+        return false;
+    }
+
+    private void ViewMessage(MessageLog message)
+    {
+        _selectedMessage = message;
+        _showMessageDialog = true;
+    }
+
+    private Color GetMessageTypeColor(string type)
+    {
+        return type?.ToUpper() switch
+        {
+            "CHECKIN" => Color.Success,
+            "CHECKOUT" => Color.Info,
+            "ABSENT" => Color.Error,
+            "LATE" => Color.Warning,
+            _ => Color.Default
+        };
+    }
+
+    private string GetMessageTypeLabel(string type)
+    {
+        return type?.ToUpper() switch
+        {
+            "CHECKIN" => "Check-In",
+            "CHECKOUT" => "Check-Out",
+            "ABSENT" => "Absent",
+            "LATE" => "Late Arrival",
+            _ => type ?? "Unknown"
+        };
+    }
+
+    private Color GetStatusColor(string status)
+    {
+        return status?.ToUpper() switch
+        {
+            "SENT" => Color.Success,
+            "PENDING" => Color.Warning,
+            "FAILED" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetStatusIcon(string status)
+    {
+        return status?.ToUpper() switch
+        {
+            "SENT" => Icons.Material.Filled.CheckCircle,
+            "PENDING" => Icons.Material.Filled.Schedule,
+            "FAILED" => Icons.Material.Filled.Error,
+            _ => Icons.Material.Filled.Help
+        };
+    }
+}

@@ -1,0 +1,627 @@
+﻿@page "/register"
+@using CSMTutorial.Components.Layout
+@using CSMTutorial.Models
+@using CSMTutorial.Services
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web
+@layout LoginLayout
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject ILogger<Register> Logger
+@implements IDisposable
+@rendermode RenderMode.InteractiveServer
+
+<PageTitle>Register - Create Account</PageTitle>
+
+<div class="register-layout">
+    <div class="split-card">
+
+        <!-- Left Branding Panel (Hidden on smaller screens) -->
+        <div class="brand-panel d-none d-lg-flex">
+            <!-- Decorative floating shapes -->
+            <div class="shape shape-1"></div>
+            <div class="shape shape-2"></div>
+            <div class="shape shape-3"></div>
+
+            <div class="brand-content">
+                <div class="brand-logo mb-4">
+                    <i class="bi bi-grid-1x2-fill text-white fs-2"></i>
+                </div>
+
+                <h1 class="display-5 fw-bold text-white mb-4 position-relative z-1">
+                    Start your<br />journey with us.
+                </h1>
+                <p class="text-white-50 fs-5 mb-5 position-relative z-1 pe-4">
+                    Join our platform to manage, analyze, and visualize your Excel data seamlessly.
+                </p>
+
+                <div class="feature-list position-relative z-1 mt-auto">
+                    <div class="d-flex align-items-center text-white-50 mb-3">
+                        <i class="bi bi-check-circle-fill text-indigo-400 me-3 fs-5"></i>
+                        <span>Secure and reliable cloud storage</span>
+                    </div>
+                    <div class="d-flex align-items-center text-white-50 mb-3">
+                        <i class="bi bi-check-circle-fill text-indigo-400 me-3 fs-5"></i>
+                        <span>Advanced data analytics</span>
+                    </div>
+                    <div class="d-flex align-items-center text-white-50">
+                        <i class="bi bi-check-circle-fill text-indigo-400 me-3 fs-5"></i>
+                        <span>Real-time collaboration</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Form Panel -->
+        <div class="form-panel">
+            @if (isSuccess)
+            {
+                <!-- Success Toast -->
+                <div class="alert alert-success d-flex align-items-center toast-top-right shadow-lg border-0" role="alert" style="background-color: #ecfdf5; border-radius: 16px;">
+                    <div class="me-3" style="width: 32px; height: 32px; min-width: 32px; background: #d1fae5; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-check-lg text-success" style="font-size: 1.2rem;"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-0 fw-bold text-success-emphasis" style="font-size: 0.9rem;">Welcome Aboard!</h6>
+                        <div class="text-success-emphasis fw-medium" style="font-size: 0.8rem;">@successMessage</div>
+                    </div>
+                </div>
+
+                <!-- Center Redirect Content -->
+                <div class="success-view text-center my-auto">
+                    <div class="redirect-box p-4 mb-4 rounded-4 bg-light border border-light-subtle shadow-sm mx-auto" style="max-width: 400px;">
+                        <div class="spinner-border spinner-border-sm text-indigo-600 me-2" role="status"></div>
+                        <span class="text-secondary fw-medium">Heading to login in <strong>@countdown</strong> seconds...</span>
+                    </div>
+
+                    <button type="button" class="btn btn-outline-primary custom-btn px-5 py-2 fw-bold" @onclick="NavigateToLogin">
+                        Proceed to Login <i class="bi bi-arrow-right ms-2"></i>
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="form-header mb-4">
+                    <h2 class="fw-bold text-dark mb-2">Create Account</h2>
+                    <p class="text-muted">Fill in your details to get started.</p>
+                </div>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger d-flex align-items-center toast-top-right shadow-lg border-0" role="alert" style="background-color: #fef2f2; border-radius: 16px;">
+                        <div class="me-3" style="width: 32px; height: 32px; min-width: 32px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 1rem;"></i>
+                        </div>
+                        <div class="text-danger-emphasis fw-medium" style="font-size: 0.85rem;">@errorMessage</div>
+                    </div>
+                }
+
+                <EditForm Model="@model" OnValidSubmit="HandleRegister">
+                    <DataAnnotationsValidator />
+
+                    <div class="row gx-3">
+                        <!-- Username -->
+                        <div class="col-md-12">
+                            <div class="form-floating mb-3 position-relative">
+                                <i class="bi bi-at input-icon"></i>
+                                <InputText id="username" class="form-control solid-input ps-5" @bind-Value="model.Username" placeholder="Username" disabled="@isLoading" />
+                                <label for="username" class="ms-4 text-muted">Username <span class="text-danger">*</span></label>
+                                <ValidationMessage For="@(() => model.Username)" class="text-danger small mt-1 fw-medium px-2 d-block" />
+                            </div>
+                        </div>
+
+                        <!-- Email -->
+                        <div class="col-md-12">
+                            <div class="form-floating mb-3 position-relative">
+                                <i class="bi bi-envelope input-icon"></i>
+                                <InputText id="email" type="email" class="form-control solid-input ps-5" @bind-Value="model.Email" placeholder="Email" disabled="@isLoading" />
+                                <label for="email" class="ms-4 text-muted">Email Address <span class="text-danger">*</span></label>
+                                <ValidationMessage For="@(() => model.Email)" class="text-danger small mt-1 fw-medium px-2 d-block" />
+                            </div>
+                        </div>
+
+                        <!-- Full Name -->
+                        <div class="col-md-12">
+                            <div class="form-floating mb-3 position-relative">
+                                <i class="bi bi-person input-icon"></i>
+                                <InputText id="fullname" class="form-control solid-input ps-5" @bind-Value="model.FullName" placeholder="Full Name" disabled="@isLoading" />
+                                <label for="fullname" class="ms-4 text-muted">Full Name (Optional)</label>
+                            </div>
+                        </div>
+
+                        <!-- Password -->
+                        <div class="col-md-12">
+                            <div class="form-floating mb-2 position-relative">
+                                <i class="bi bi-key input-icon"></i>
+                                <InputText id="password" type="@(showPassword ? "text" : "password")" class="form-control solid-input ps-5" @bind-Value="model.Password" placeholder="Password" disabled="@isLoading" />
+                                <label for="password" class="ms-4 text-muted">Password <span class="text-danger">*</span></label>
+                                <button type="button" class="btn btn-link toggle-pw text-muted" @onclick="TogglePassword" tabindex="-1" disabled="@isLoading">
+                                    <i class="bi @(showPassword ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
+                                </button>
+                                <ValidationMessage For="@(() => model.Password)" class="text-danger small mt-1 fw-medium px-2 d-block" />
+                            </div>
+                        </div>
+
+                        <!-- Password Strength Indicator -->
+                        @if (!string.IsNullOrEmpty(model.Password))
+                        {
+                            <div class="col-md-12 mb-3">
+                                <div class="px-2">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="small text-muted" style="font-size: 0.75rem;">Password strength</span>
+                                        <span class="small fw-bold @GetStrengthTextClass()" style="font-size: 0.75rem;">@GetStrengthText()</span>
+                                    </div>
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar @GetStrengthClass() transition-all" role="progressbar" style="width: @@GetStrengthPercentage()%"></div>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2 mt-2">
+                                        <span class="badge rounded-pill @(HasMinLength ? "bg-success-subtle text-success" : "bg-light text-muted border")" style="font-size: 0.7rem;">6+ Chars</span>
+                                        <span class="badge rounded-pill @(HasUppercase ? "bg-success-subtle text-success" : "bg-light text-muted border")" style="font-size: 0.7rem;">Uppercase</span>
+                                        <span class="badge rounded-pill @(HasLowercase ? "bg-success-subtle text-success" : "bg-light text-muted border")" style="font-size: 0.7rem;">Lowercase</span>
+                                        <span class="badge rounded-pill @(HasNumber ? "bg-success-subtle text-success" : "bg-light text-muted border")" style="font-size: 0.7rem;">Number</span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="col-md-12 mb-3"></div>
+                        }
+
+                        <!-- Confirm Password -->
+                        <div class="col-md-12">
+                            <div class="form-floating mb-4 position-relative">
+                                <i class="bi bi-shield-check input-icon"></i>
+                                <InputText id="confirmPassword" type="password" class="form-control solid-input ps-5" @bind-Value="model.ConfirmPassword" placeholder="Confirm Password" disabled="@isLoading" />
+                                <label for="confirmPassword" class="ms-4 text-muted">Confirm Password <span class="text-danger">*</span></label>
+                                <ValidationMessage For="@(() => model.ConfirmPassword)" class="text-danger small mt-1 fw-medium px-2 d-block" />
+
+                                @if (!string.IsNullOrEmpty(model.ConfirmPassword) && model.Password == model.ConfirmPassword)
+                                {
+                                    <div class="text-success small mt-1 fw-medium px-2 position-absolute" style="bottom: -20px;">
+                                        <i class="bi bi-check2-all me-1"></i>Matches
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Submit -->
+                        <div class="col-md-12 mt-2">
+                            <button type="submit" class="btn btn-primary custom-btn w-100 py-3 fw-bold" disabled="@isLoading">
+                                @if (isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    <span>Processing...</span>
+                                }
+                                else
+                                {
+                                    <span>Create Account</span>
+                                }
+                            </button>
+                        </div>
+                    </div>
+                </EditForm>
+
+                <div class="text-center mt-4 pt-3 border-top border-light-subtle">
+                    <p class="text-muted small fw-medium mb-0">
+                        Already have an account?
+                        <a href="/login" class="text-indigo-600 fw-bold text-decoration-none ms-1 hover-link">Sign in</a>
+                    </p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Main Layout */
+    .register-layout {
+        min-height: 100vh;
+        background-color: #f1f5f9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1rem;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    /* Split Card Container */
+    .split-card {
+        display: flex;
+        flex-direction: row;
+        width: 100%;
+        max-width: 1000px;
+        background: #ffffff;
+        border-radius: 24px;
+        box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.15);
+        overflow: hidden;
+        min-height: 680px;
+    }
+
+    /* Left Panel (Branding) */
+    .brand-panel {
+        width: 45%;
+        background: linear-gradient(135deg, #312e81 0%, #4f46e5 100%);
+        padding: 4rem 3rem;
+        position: relative;
+        flex-direction: column;
+        justify-content: center;
+        overflow: hidden;
+    }
+
+    .brand-content {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .text-indigo-400 {
+        color: #818cf8 !important;
+    }
+
+    /* Decorative Abstract Shapes */
+    .shape {
+        position: absolute;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(5px);
+    }
+
+    .shape-1 {
+        width: 300px;
+        height: 300px;
+        top: -100px;
+        left: -100px;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .shape-2 {
+        width: 400px;
+        height: 400px;
+        bottom: -150px;
+        right: -100px;
+        background: rgba(99, 102, 241, 0.2);
+    }
+
+    .shape-3 {
+        width: 100px;
+        height: 100px;
+        top: 40%;
+        left: 80%;
+        background: linear-gradient(135deg, #c7d2fe, #818cf8);
+        opacity: 0.2;
+    }
+
+    /* Right Panel (Form) */
+    .form-panel {
+        width: 55%;
+        padding: 4rem 4.5rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        background-color: #ffffff;
+    }
+
+    /* Input Styling - Solid Filled Style */
+    .solid-input {
+        border-radius: 12px;
+        border: 2px solid transparent;
+        background-color: #f8fafc;
+        height: 3.5rem;
+        font-weight: 500;
+        color: #0f172a;
+        transition: all 0.2s ease;
+    }
+
+        .solid-input:focus {
+            background-color: #ffffff;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+        }
+
+    .form-floating > label {
+        padding: 1rem 0.75rem;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+
+    .input-icon {
+        position: absolute;
+        top: 50%;
+        left: 1.25rem;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        font-size: 1.2rem;
+        z-index: 4;
+        transition: color 0.2s;
+    }
+
+    .solid-input:focus ~ .input-icon,
+    .solid-input:focus ~ label {
+        color: #4f46e5 !important;
+    }
+
+    /* Password Toggle */
+    .toggle-pw {
+        position: absolute;
+        right: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 5;
+        border: none;
+        background: transparent;
+        padding: 0.5rem;
+        border-radius: 8px;
+    }
+
+        .toggle-pw:hover {
+            background-color: #e2e8f0;
+            color: #0f172a !important;
+        }
+
+    /* Button */
+    .custom-btn {
+        background-color: #4f46e5;
+        border-color: #4f46e5;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+    }
+
+        .custom-btn:hover:not(:disabled) {
+            background-color: #4338ca;
+            border-color: #4338ca;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(79, 70, 229, 0.3);
+        }
+
+    .text-indigo-600 {
+        color: #4f46e5 !important;
+    }
+
+    .hover-link:hover {
+        color: #3730a3 !important;
+        text-decoration: underline !important;
+    }
+
+    /* Success State */
+    .success-view {
+        animation: fadeScale 0.5s ease-out;
+    }
+
+    .success-icon-wrapper {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
+    }
+
+    /* Custom Alert */
+    .custom-alert.alert-danger {
+        background-color: #fef2f2;
+        color: #991b1b;
+    }
+
+    /* Toast Notifications */
+    .toast-top-right {
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        z-index: 1050;
+        min-width: 280px;
+        max-width: 380px;
+        margin-bottom: 0 !important;
+        padding: 1rem 1.25rem;
+        animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @@keyframes slideInRight {
+        from
+
+    {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+
+    }
+
+    .transition-all {
+        transition: all 0.3s ease;
+    }
+
+    ::deep .validation-message {
+        display: none;
+    }
+    /* Use our custom labels instead */
+
+    @@keyframes fadeScale {
+        0%
+
+    {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    }
+
+    /* Responsive adjustments */
+    @@media (max-width: 991px) {
+        .brand-panel
+
+    {
+        display: none;
+    }
+
+    .form-panel {
+        width: 100%;
+        padding: 3rem 2rem;
+    }
+
+    .split-card {
+        max-width: 500px;
+        min-height: auto;
+    }
+
+    }
+
+    @@media (max-width: 576px) {
+        .form-panel
+
+    {
+        padding: 2rem 1.5rem;
+    }
+
+    }
+</style>
+ 
+ 
+@code {
+    private RegisterModel model = new();
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+    private bool isLoading = false;
+    private bool isSuccess = false;
+    private bool showPassword = false;
+    private int countdown = 3;
+    private System.Threading.Timer? redirectTimer;
+
+    // Password strength indicators
+    private bool HasMinLength => !string.IsNullOrEmpty(model.Password) && model.Password.Length >= 6;
+    private bool HasUppercase => !string.IsNullOrEmpty(model.Password) && model.Password.Any(char.IsUpper);
+    private bool HasLowercase => !string.IsNullOrEmpty(model.Password) && model.Password.Any(char.IsLower);
+    private bool HasNumber => !string.IsNullOrEmpty(model.Password) && model.Password.Any(char.IsDigit);
+
+    private int PasswordStrength
+    {
+        get
+        {
+            int strength = 0;
+            if (HasMinLength) strength++;
+            if (HasUppercase) strength++;
+            if (HasLowercase) strength++;
+            if (HasNumber) strength++;
+            return strength;
+        }
+    }
+
+    private void TogglePassword()
+    {
+        showPassword = !showPassword;
+    }
+
+    private string GetStrengthClass() => PasswordStrength switch
+    {
+        1 or 2 => "strength-weak",
+        3 => "strength-medium",
+        4 => "strength-strong",
+        _ => ""
+    };
+
+    private string GetStrengthTextClass() => PasswordStrength switch
+    {
+        1 or 2 => "weak",
+        3 => "medium",
+        4 => "strong",
+        _ => ""
+    };
+
+    private string GetStrengthText() => PasswordStrength switch
+    {
+        1 or 2 => "Weak",
+        3 => "Medium",
+        4 => "Strong",
+        _ => ""
+    };
+
+    private async Task HandleRegister()
+    {
+        if (isLoading) return;
+
+        isLoading = true;
+        errorMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            Logger.LogInformation("Starting registration for user: {Username}", model.Username);
+
+            // Debug: Log the model values
+            Logger.LogInformation("Model values - Username: {Username}, Email: {Email}, Password length: {PasswordLength}",
+                model.Username, model.Email, model.Password?.Length ?? 0);
+
+            var result = await AuthService.RegisterAsync(model);
+
+            Logger.LogInformation("Registration result - Success: {Success}, Message: {Message}", result.Success, result.Message);
+
+            if (result.Success)
+            {
+                isSuccess = true;
+                successMessage = result.Message ?? "Your account has been created successfully!";
+                Logger.LogInformation("User registered successfully: {Username}", model.Username);
+                StartRedirectTimer();
+            }
+            else
+            {
+                errorMessage = result.Message ?? "Registration failed. Please try again.";
+                Logger.LogWarning("Registration failed for {Username}: {Message}", model.Username, result.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Exception during registration for user: {Username}", model.Username);
+            errorMessage = $"An unexpected error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void StartRedirectTimer()
+    {
+        countdown = 3;
+        redirectTimer = new System.Threading.Timer(async _ =>
+        {
+            if (countdown > 0)
+            {
+                countdown--;
+                await InvokeAsync(StateHasChanged);
+            }
+
+            if (countdown <= 0)
+            {
+                redirectTimer?.Dispose();
+                await InvokeAsync(() =>
+                {
+                    Navigation.NavigateTo("/login?registered=true", forceLoad: true);
+                });
+            }
+        }, null, 1000, 1000);
+    }
+
+    private void NavigateToLogin()
+    {
+        redirectTimer?.Dispose();
+        Navigation.NavigateTo("/login?registered=true", forceLoad: true);
+    }
+
+    public void Dispose()
+    {
+        redirectTimer?.Dispose();
+    }
+}

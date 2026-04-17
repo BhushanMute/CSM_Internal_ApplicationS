@@ -1,0 +1,2570 @@
+﻿@page "/attendance/daily"
+@using CSMTutorial.Models
+@using CSMTutorial.Data.Repositories
+
+@inject IAttendanceRepository AttendanceRepository
+@inject IEmployeeRepository EmployeeRepository
+@inject IJSRuntime JS
+@inject ILogger<DailyAttendance> Logger
+
+<PageTitle>Daily Attendance Report</PageTitle>
+
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h3">
+                <i class="bi bi-calendar-check me-2"></i>Daily Attendance Report
+            </h1>
+            <p class="text-muted">View daily attendance, punch records & device logs</p>
+        </div>
+        <div class="col-auto d-flex gap-2">
+            <button class="btn btn-outline-success" @onclick="ExportReport" disabled="@isExporting">
+                <i class="bi bi-file-earmark-excel me-1"></i>Export
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters Card -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0">
+                <i class="bi bi-funnel me-2"></i>Filters
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <!-- Date Picker -->
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-calendar3 me-1 text-primary"></i>Date
+                    </label>
+                    <input type="date" class="form-control"
+                           @bind="selectedDate"
+                           @bind:after="OnDateChanged"
+                           max="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                </div>
+
+                <!-- Device Log Table Selector -->
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-database me-1 text-info"></i>Device Log Source
+                    </label>
+                    <select class="form-select" @bind="selectedDeviceLogTable" @bind:after="OnDeviceLogTableChanged">
+                        <option value="">Auto (Based on Date)</option>
+                        @foreach (var table in availableLogTables)
+                        {
+                            <option value="@table.TableName">@table.DisplayName</option>
+                        }
+                    </select>
+                </div>
+
+                <!-- Company Filter -->
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-building me-1"></i>Company
+                    </label>
+                    <select class="form-select" @bind="selectedCompanyId" @bind:after="OnFilterChanged">
+                        <option value="0">All Companies</option>
+                        @foreach (var company in companies)
+                        {
+                            <option value="@company.CompanyId">@company.CompanyName</option>
+                        }
+                    </select>
+                </div>
+
+                <!-- Department Filter -->
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-diagram-3 me-1"></i>Department
+                    </label>
+                    <select class="form-select" @bind="selectedDepartmentId" @bind:after="OnFilterChanged">
+                        <option value="0">All Departments</option>
+                        @foreach (var dept in departments)
+                        {
+                            <option value="@dept.DepartmentId">@dept.DepartmentName</option>
+                        }
+                    </select>
+                </div>
+
+                <!-- Status Filter -->
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-filter me-1"></i>Status
+                    </label>
+                    <select class="form-select" @bind="selectedStatus" @bind:after="OnFilterChanged">
+                        <option value="">All Status</option>
+                        <option value="Present">Present</option>
+                        <option value="Absent">Absent</option>
+                        <option value="WeeklyOff">Weekly Off</option>
+                        <option value="Holiday">Holiday</option>
+                        <option value="Leave">On Leave</option>
+                    </select>
+                </div>
+
+                <!-- Search -->
+                <div class="col-md-1 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" @onclick="OnFilterChanged">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="row mt-3">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" placeholder="Search employee name or code..."
+                               @bind="searchTerm" @bind:event="oninput" @bind:after="OnSearchChanged" />
+                        @if (!string.IsNullOrEmpty(searchTerm))
+                        {
+                            <button class="btn btn-outline-secondary" @onclick="@(() => { searchTerm = string.Empty; _ = OnFilterChanged(); })">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        }
+                    </div>
+                </div>
+                <div class="col-md-8 d-flex align-items-center">
+                    <span class="text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Showing attendance for <strong>@selectedDate.ToString("dddd, dd MMM yyyy")</strong>
+                        @if (!string.IsNullOrEmpty(activeDeviceLogTable))
+                        {
+                            <span> | Device Log: <code>@activeDeviceLogTable</code></span>
+                        }
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    @if (summary != null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-4 col-xl-2">
+                <div class="card border-0 shadow-sm h-100 text-center">
+                    <div class="card-body py-3">
+                        <div class="text-primary mb-1"><i class="bi bi-people fs-4"></i></div>
+                        <h4 class="mb-0">@summary.TotalRecords</h4>
+                        <small class="text-muted">Total</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4 col-xl-2">
+                <div class="card border-0 shadow-sm h-100 text-center border-start border-success border-3">
+                    <div class="card-body py-3">
+                        <div class="text-success mb-1"><i class="bi bi-check-circle-fill fs-4"></i></div>
+                        <h4 class="mb-0 text-success">@summary.PresentCount</h4>
+                        <small class="text-muted">Present</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4 col-xl-2">
+                <div class="card border-0 shadow-sm h-100 text-center border-start border-danger border-3">
+                    <div class="card-body py-3">
+                        <div class="text-danger mb-1"><i class="bi bi-x-circle-fill fs-4"></i></div>
+                        <h4 class="mb-0 text-danger">@summary.AbsentCount</h4>
+                        <small class="text-muted">Absent</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4 col-xl-2">
+                <div class="card border-0 shadow-sm h-100 text-center border-start border-warning border-3">
+                    <div class="card-body py-3">
+                        <div class="text-warning mb-1"><i class="bi bi-clock-fill fs-4"></i></div>
+                        <h4 class="mb-0 text-warning">@summary.LateCount</h4>
+                        <small class="text-muted">Late</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4 col-xl-2">
+                <div class="card border-0 shadow-sm h-100 text-center border-start border-info border-3">
+                    <div class="card-body py-3">
+                        <div class="text-info mb-1"><i class="bi bi-calendar-x fs-4"></i></div>
+                        <h4 class="mb-0 text-info">@summary.OnLeaveCount</h4>
+                        <small class="text-muted">Leave</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4 col-xl-2">
+                <div class="card border-0 shadow-sm h-100 text-center border-start border-secondary border-3">
+                    <div class="card-body py-3">
+                        <div class="text-secondary mb-1"><i class="bi bi-exclamation-triangle-fill fs-4"></i></div>
+                        <h4 class="mb-0 text-secondary">@summary.MissedPunchCount</h4>
+                        <small class="text-muted">Missed Punch</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- View Toggle Tabs -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-2">
+            <ul class="nav nav-pills">
+                <li class="nav-item">
+                    <button class="nav-link @(activeTab == "attendance" ? "active" : "")"
+                            @onclick="@(() => activeTab = "attendance")">
+                        <i class="bi bi-table me-1"></i>Attendance Log (@totalCount)
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link @(activeTab == "devicelogs" ? "active" : "")"
+                            @onclick="@(() => { activeTab = "devicelogs"; _ = LoadDeviceLogs(); })">
+                        <i class="bi bi-cpu me-1"></i>Device Logs (@deviceLogs.Count)
+                    </button>
+                </li>
+            </ul>
+        </div>
+
+        <!-- ATTENDANCE LOG TAB -->
+        @if (activeTab == "attendance")
+        {
+            <div class="card-body p-0">
+                @if (isLoading)
+                {
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2 text-muted">Loading attendance data...</p>
+                    </div>
+                }
+                else if (!attendanceRecords.Any())
+                {
+                    <div class="text-center py-5">
+                        <i class="bi bi-inbox text-muted" style="font-size: 4rem;"></i>
+                        <h5 class="mt-3 text-muted">No Attendance Records</h5>
+                        <p class="text-muted">No attendance data found for @selectedDate.ToString("dd MMM yyyy")</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th style="width: 40px;">#</th>
+                                    <th>Employee</th>
+                                    <th>Company</th>
+                                    <th>Department</th>
+                                    <th>Shift</th>
+                                    <th>In Time</th>
+                                    <th>Out Time</th>
+                                    <th>Duration</th>
+                                    <th>Late By</th>
+                                    <th>Early By</th>
+                                    <th>OT</th>
+                                    <th>Status</th>
+                                    <th style="width: 80px;">Punches</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{
+                                    int rowNum = (currentPage - 1) * pageSize;
+                                }
+                                @foreach (var record in attendanceRecords)
+                                {
+                                    rowNum++;
+                                    <tr class="@GetAttendanceRowClass(record)">
+                                        <td class="text-muted">@rowNum</td>
+                                        <td>
+                                            <div>
+                                                <strong>@record.EmployeeName</strong>
+                                                <small class="text-muted d-block">
+                                                    <code>@record.EmployeeCode</code>
+                                                </small>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <small>@(record.CompanyName ?? "-")</small>
+                                        </td>
+                                        <td>
+                                            <small>@(record.DepartmentName ?? "-")</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark" title="@record.ShiftBeginTime - @record.ShiftEndTime">
+                                                @(record.ShiftName ?? "-")
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="@(record.LateBy > 0 ? "text-danger fw-bold" : "text-success")">
+                                                @(record.InTime ?? "-")
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="@(record.EarlyBy > 0 ? "text-warning fw-bold" : "")">
+                                                @(record.OutTime ?? "-")
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <strong>@record.FormattedDuration</strong>
+                                        </td>
+                                        <td>
+                                            @if (record.LateBy > 0)
+                                            {
+                                                <span class="badge bg-danger-subtle text-danger">
+                                                    @record.FormattedLateBy
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (record.EarlyBy > 0)
+                                            {
+                                                <span class="badge bg-warning-subtle text-warning">
+                                                    @record.FormattedEarlyBy
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (record.OverTime > 0)
+                                            {
+                                                <span class="badge bg-info-subtle text-info">
+                                                    @record.FormattedOverTime
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="badge @GetStatusBadgeClass(record.StatusCode)">
+                                                @record.StatusDisplay
+                                            </span>
+                                            @if (record.MissedOutPunch == 1 || record.MissedInPunch == 1)
+                                            {
+                                                <i class="bi bi-exclamation-triangle text-warning ms-1" title="Missed Punch"></i>
+                                            }
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary"
+                                                    @onclick="@(() => ShowPunchDetails(record))"
+                                                    title="View Punch Details">
+                                                <i class="bi bi-list-ul"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+
+            <!-- Pagination -->
+            @if (totalPages > 1)
+            {
+                <div class="card-footer bg-white py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-muted">
+                            Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, totalCount) of @totalCount
+                        </span>
+                        <nav>
+                            <ul class="pagination pagination-sm mb-0">
+                                <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                    <button class="page-link" @onclick="@(() => GoToPage(currentPage - 1))">
+                                        <i class="bi bi-chevron-left"></i>
+                                    </button>
+                                </li>
+                                @foreach (var pageNumber in GetVisiblePages())
+                                {
+                                    <li class="page-item @(pageNumber == currentPage ? "active" : "")">
+                                        <button class="page-link" @onclick="@(() => GoToPage(pageNumber))">
+                                            @pageNumber
+                                        </button>
+                                    </li>
+                                }
+                                <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                    <button class="page-link" @onclick="@(() => GoToPage(currentPage + 1))">
+                                        <i class="bi bi-chevron-right"></i>
+                                    </button>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            }
+        }
+
+        <!-- DEVICE LOGS TAB -->
+        @if (activeTab == "devicelogs")
+        {
+            <div class="card-body p-0">
+                @if (isLoadingDeviceLogs)
+                {
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-info" role="status"></div>
+                        <p class="mt-2 text-muted">Loading device logs from <code>@activeDeviceLogTable</code>...</p>
+                    </div>
+                }
+                else if (!deviceLogs.Any())
+                {
+                    <div class="text-center py-5">
+                        <i class="bi bi-cpu text-muted" style="font-size: 4rem;"></i>
+                        <h5 class="mt-3 text-muted">No Device Logs Found</h5>
+                        <p class="text-muted">No raw punch data found in <code>@activeDeviceLogTable</code> for @selectedDate.ToString("dd MMM yyyy")</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Employee</th>
+                                    <th>Punch Time</th>
+                                    <th>Direction</th>
+                                    <th>Device</th>
+                                    <th>Temperature</th>
+                                    <th>Mask</th>
+                                    <th>Location</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{
+                                    int dlRow = 0;
+                                }
+                                @foreach (var log in deviceLogs.Take(500))
+                                {
+                                    dlRow++;
+                                    <tr>
+                                        <td class="text-muted">@dlRow</td>
+                                        <td>
+                                            <strong>@(log.EmployeeName ?? log.UserId)</strong>
+                                            @if (!string.IsNullOrEmpty(log.EmployeeCode))
+                                            {
+                                                <small class="text-muted d-block"><code>@log.EmployeeCode</code></small>
+                                            }
+                                        </td>
+                                        <td>
+                                            <code>@log.LogDate.ToString("dd-MMM-yyyy hh:mm:ss tt")</code>
+                                        </td>
+                                        <td>
+                                            @if (log.DirectionDisplay == "IN")
+                                            {
+                                                <span class="badge bg-success">
+                                                    <i class="bi bi-box-arrow-in-right me-1"></i>IN
+                                                </span>
+                                            }
+                                            else if (log.DirectionDisplay == "OUT")
+                                            {
+                                                <span class="badge bg-danger">
+                                                    <i class="bi bi-box-arrow-right me-1"></i>OUT
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">@(log.Direction ?? "-")</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <small>@(log.DeviceName ?? $"Device {log.DeviceId}")</small>
+                                        </td>
+                                        <td>
+                                            @if (log.BodyTemperature.HasValue && log.BodyTemperature > 0)
+                                            {
+                                                <span class="@(log.BodyTemperature > 37.5 ? "text-danger fw-bold" : "text-success")">
+                                                    @log.BodyTemperature.Value.ToString("F1")°C
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (log.IsMaskOn == 1)
+                                            {
+                                                <span class="badge bg-success-subtle text-success">Yes</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">@(TruncateText(log.LocationAddress, 30) ?? "-")</small>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (deviceLogs.Count > 500)
+                    {
+                        <div class="p-3 text-center bg-light border-top">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Showing first 500 of @deviceLogs.Count records
+                        </div>
+                    }
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Punch Details Modal -->
+@if (showPunchModal && selectedAttendance != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-clock-history me-2"></i>Punch Details
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="ClosePunchModal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Employee Info -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <table class="table table-sm table-borderless mb-0">
+                                <tr>
+                                    <th width="40%">Employee:</th>
+                                    <td><strong>@selectedAttendance.EmployeeName</strong> (<code>@selectedAttendance.EmployeeCode</code>)</td>
+                                </tr>
+                                <tr>
+                                    <th>Date:</th>
+                                    <td>@selectedAttendance.AttendanceDate.ToString("dd MMM yyyy (dddd)")</td>
+                                </tr>
+                                <tr>
+                                    <th>Shift:</th>
+                                    <td>@(selectedAttendance.ShiftName ?? "N/A") (@selectedAttendance.ShiftBeginTime - @selectedAttendance.ShiftEndTime)</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-sm table-borderless mb-0">
+                                <tr>
+                                    <th width="40%">Status:</th>
+                                    <td><span class="badge @GetStatusBadgeClass(selectedAttendance.StatusCode)">@selectedAttendance.StatusDisplay</span></td>
+                                </tr>
+                                <tr>
+                                    <th>Duration:</th>
+                                    <td><strong>@selectedAttendance.FormattedDuration</strong></td>
+                                </tr>
+                                <tr>
+                                    <th>In / Out:</th>
+                                    <td>
+                                        <span class="text-success">@(selectedAttendance.InTime ?? "-")</span> →
+                                        <span class="text-danger">@(selectedAttendance.OutTime ?? "-")</span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Punch Records from AttendanceLogs -->
+                    @if (!string.IsNullOrEmpty(selectedAttendance.PunchRecords))
+                    {
+                        <h6 class="mb-2"><i class="bi bi-list-check me-1"></i>Stored Punch Records</h6>
+                        <div class="alert alert-light mb-3">
+                            <code>@selectedAttendance.PunchRecords</code>
+                        </div>
+                    }
+
+                    <!-- Raw Punch Details from DeviceLogs -->
+                    <h6 class="mb-2">
+                        <i class="bi bi-cpu me-1"></i>Raw Device Punches
+                        <small class="text-muted">(from @activeDeviceLogTable)</small>
+                    </h6>
+
+                    @if (isLoadingPunchDetails)
+                    {
+                        <div class="text-center py-3">
+                            <div class="spinner-border spinner-border-sm text-primary"></div>
+                            <span class="ms-2">Loading punch details...</span>
+                        </div>
+                    }
+                    else if (punchDetails.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Time</th>
+                                        <th>Direction</th>
+                                        <th>Device</th>
+                                        <th>Temperature</th>
+                                        <th>Location</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @{
+                                        int punchNum = 0;
+                                    }
+                                    @foreach (var punch in punchDetails)
+                                    {
+                                        punchNum++;
+                                        <tr>
+                                            <td>@punchNum</td>
+                                            <td><code>@punch.FormattedTime</code></td>
+                                            <td>
+                                                @if (punch.Direction == "0" || punch.Direction?.ToUpper() == "IN")
+                                                {
+                                                    <span class="badge bg-success">IN</span>
+                                                }
+                                                else if (punch.Direction == "1" || punch.Direction?.ToUpper() == "OUT")
+                                                {
+                                                    <span class="badge bg-danger">OUT</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">@(punch.Direction ?? "-")</span>
+                                                }
+                                            </td>
+                                            <td><small>@(punch.DeviceName ?? "-")</small></td>
+                                            <td>
+                                                @if (punch.BodyTemperature > 0)
+                                                {
+                                                    <span>@punch.BodyTemperature?.ToString("F1")°C</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td><small>@(TruncateText(punch.LocationAddress, 40) ?? "-")</small></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning mb-0">
+                            <i class="bi bi-exclamation-circle me-1"></i>
+                            No raw punch records found in device logs for this date.
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="ClosePunchModal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .nav-pills .nav-link {
+        border-radius: 8px;
+        padding: 8px 16px;
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+
+        .nav-pills .nav-link.active {
+            background-color: #6366f1;
+        }
+
+    .sticky-top {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .table-sm td, .table-sm th {
+        padding: 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    .bg-success-subtle {
+        background-color: rgba(25, 135, 84, 0.1) !important;
+    }
+
+    .bg-danger-subtle {
+        background-color: rgba(220, 53, 69, 0.1) !important;
+    }
+
+    .bg-warning-subtle {
+        background-color: rgba(255, 193, 7, 0.1) !important;
+    }
+
+    .bg-info-subtle {
+        background-color: rgba(13, 202, 240, 0.1) !important;
+    }
+    /* ============================================
+       DAILY ATTENDANCE DASHBOARD - PREMIUM STYLES
+       ============================================ */
+
+    /* CSS Variables for Theming */
+    :root {
+        --primary: #6366f1;
+        --primary-dark: #4f46e5;
+        --primary-light: #a5b4fc;
+        --success: #10b981;
+        --success-light: #d1fae5;
+        --danger: #ef4444;
+        --danger-light: #fee2e2;
+        --warning: #f59e0b;
+        --warning-light: #fef3c7;
+        --info: #3b82f6;
+        --info-light: #dbeafe;
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-200: #e5e7eb;
+        --gray-300: #d1d5db;
+        --gray-400: #9ca3af;
+        --gray-500: #6b7280;
+        --gray-600: #4b5563;
+        --gray-700: #374151;
+        --gray-800: #1f2937;
+        --gray-900: #111827;
+        --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+        --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        --radius-sm: 6px;
+        --radius: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+    }
+
+    /* Dashboard Container */
+    .attendance-dashboard {
+        padding: 24px;
+        background: var(--gray-50);
+        min-height: 100vh;
+    }
+
+    /* ============================================
+       HEADER SECTION
+       ============================================ */
+    .dashboard-header {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        border-radius: var(--radius-xl);
+        padding: 24px 32px;
+        margin-bottom: 24px;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .header-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .header-icon {
+        width: 56px;
+        height: 56px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: var(--radius-lg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(10px);
+    }
+
+        .header-icon i {
+            font-size: 28px;
+            color: white;
+        }
+
+    .header-text h1 {
+        color: white;
+        font-size: 24px;
+        font-weight: 700;
+        margin: 0;
+        letter-spacing: -0.5px;
+    }
+
+    .header-text p {
+        color: rgba(255, 255, 255, 0.8);
+        margin: 4px 0 0;
+        font-size: 14px;
+    }
+
+    .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .date-display {
+        background: rgba(255, 255, 255, 0.15);
+        padding: 10px 16px;
+        border-radius: var(--radius);
+        color: white;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        backdrop-filter: blur(10px);
+    }
+
+    .btn-export {
+        background: white;
+        color: var(--primary);
+        border: none;
+        padding: 10px 20px;
+        border-radius: var(--radius);
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: var(--shadow);
+    }
+
+        .btn-export:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-export:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+    .btn-refresh {
+        width: 44px;
+        height: 44px;
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        border-radius: var(--radius);
+        color: white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+
+        .btn-refresh:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-refresh i.spin {
+            animation: spin 1s linear infinite;
+        }
+
+    @@keyframes spin {
+        from
+
+    {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+
+    }
+
+    /* ============================================
+       FILTERS PANEL
+       ============================================ */
+    .filters-panel {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        margin-bottom: 24px;
+        overflow: hidden;
+    }
+
+    .filters-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 24px;
+        border-bottom: 1px solid var(--gray-100);
+    }
+
+    .filters-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        color: var(--gray-800);
+    }
+
+        .filters-title i {
+            color: var(--primary);
+        }
+
+    .btn-clear-filters {
+        background: none;
+        border: 1px solid var(--gray-200);
+        padding: 6px 12px;
+        border-radius: var(--radius-sm);
+        color: var(--gray-600);
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .btn-clear-filters:hover:not(:disabled) {
+            border-color: var(--danger);
+            color: var(--danger);
+            background: var(--danger-light);
+        }
+
+        .btn-clear-filters:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+    .filters-body {
+        padding: 20px 24px;
+    }
+
+    .filter-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+        .filter-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--gray-600);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+            .filter-group label i {
+                color: var(--primary);
+                font-size: 14px;
+            }
+
+        .filter-group select,
+        .filter-group input[type="date"] {
+            padding: 10px 14px;
+            border: 1px solid var(--gray-200);
+            border-radius: var(--radius);
+            font-size: 14px;
+            color: var(--gray-800);
+            background: white;
+            transition: all 0.2s;
+        }
+
+            .filter-group select:focus,
+            .filter-group input[type="date"]:focus {
+                outline: none;
+                border-color: var(--primary);
+                box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+            }
+
+    .date-input-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .date-shortcuts {
+        display: flex;
+        gap: 6px;
+    }
+
+        .date-shortcuts button {
+            padding: 4px 10px;
+            font-size: 11px;
+            border: 1px solid var(--gray-200);
+            background: white;
+            border-radius: var(--radius-sm);
+            color: var(--gray-600);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+            .date-shortcuts button:hover,
+            .date-shortcuts button.active {
+                background: var(--primary);
+                border-color: var(--primary);
+                color: white;
+            }
+
+    .search-row {
+        margin-top: 16px;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+    }
+
+    .search-wrapper {
+        flex: 1;
+        position: relative;
+        max-width: 500px;
+    }
+
+        .search-wrapper input {
+            width: 100%;
+            padding: 12px 16px 12px 44px;
+            border: 1px solid var(--gray-200);
+            border-radius: var(--radius);
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+            .search-wrapper input:focus {
+                outline: none;
+                border-color: var(--primary);
+                box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+            }
+
+    .search-icon {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--gray-400);
+        font-size: 18px;
+    }
+
+    .search-clear {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: var(--gray-200);
+        border: none;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--gray-600);
+        transition: all 0.2s;
+    }
+
+        .search-clear:hover {
+            background: var(--danger);
+            color: white;
+        }
+
+    .active-source {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--gray-500);
+    }
+
+        .active-source code {
+            background: var(--gray-100);
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+        }
+
+    /* ============================================
+       ANALYTICS CARDS
+       ============================================ */
+    .analytics-grid {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    @@media (max-width: 1400px) {
+        .analytics-grid
+
+    {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    }
+
+    @@media (max-width: 768px) {
+        .analytics-grid
+
+    {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    }
+
+    .analytics-card {
+        background: white;
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+        .analytics-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .analytics-card .card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 12px;
+        }
+
+            .analytics-card .card-icon i {
+                font-size: 24px;
+            }
+
+        .analytics-card.total .card-icon {
+            background: linear-gradient(135deg, var(--primary-light), var(--primary));
+        }
+
+            .analytics-card.total .card-icon i {
+                color: white;
+            }
+
+        .analytics-card.present .card-icon {
+            background: linear-gradient(135deg, var(--success-light), var(--success));
+        }
+
+            .analytics-card.present .card-icon i {
+                color: white;
+            }
+
+        .analytics-card.absent .card-icon {
+            background: linear-gradient(135deg, var(--danger-light), var(--danger));
+        }
+
+            .analytics-card.absent .card-icon i {
+                color: white;
+            }
+
+        .analytics-card.late .card-icon {
+            background: linear-gradient(135deg, var(--warning-light), var(--warning));
+        }
+
+            .analytics-card.late .card-icon i {
+                color: white;
+            }
+
+        .analytics-card.leave .card-icon {
+            background: linear-gradient(135deg, var(--info-light), var(--info));
+        }
+
+            .analytics-card.leave .card-icon i {
+                color: white;
+            }
+
+        .analytics-card.missed .card-icon {
+            background: linear-gradient(135deg, var(--gray-200), var(--gray-500));
+        }
+
+            .analytics-card.missed .card-icon i {
+                color: white;
+            }
+
+    .card-content {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .card-value {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--gray-900);
+        line-height: 1;
+    }
+
+    .card-label {
+        font-size: 13px;
+        color: var(--gray-500);
+        margin-top: 4px;
+    }
+
+    .card-percentage {
+        font-size: 12px;
+        color: var(--gray-400);
+        margin-top: 2px;
+    }
+
+    .card-progress {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: var(--gray-100);
+    }
+
+        .card-progress .progress-bar {
+            height: 100%;
+            transition: width 0.6s ease;
+        }
+
+    .analytics-card.present .progress-bar {
+        background: var(--success);
+    }
+
+    .analytics-card.absent .progress-bar {
+        background: var(--danger);
+    }
+
+    .analytics-card.late .progress-bar {
+        background: var(--warning);
+    }
+
+    .card-trend {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        color: var(--gray-300);
+        font-size: 20px;
+    }
+
+    /* ============================================
+       CONTENT PANEL & TABS
+       ============================================ */
+    .content-panel {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+    }
+
+    .tabs-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 24px;
+        border-bottom: 1px solid var(--gray-100);
+        background: var(--gray-50);
+    }
+
+    .tabs-nav {
+        display: flex;
+        gap: 8px;
+    }
+
+    .tab-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 18px;
+        background: transparent;
+        border: none;
+        border-radius: var(--radius);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--gray-600);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .tab-btn:hover {
+            background: white;
+            color: var(--gray-800);
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: var(--shadow);
+        }
+
+    .tab-badge {
+        background: rgba(0, 0, 0, 0.1);
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 12px;
+    }
+
+    .tab-btn.active .tab-badge {
+        background: rgba(255, 255, 255, 0.25);
+    }
+
+    .tabs-info {
+        font-size: 13px;
+        color: var(--gray-500);
+    }
+
+    .tab-content {
+        min-height: 400px;
+    }
+
+    /* ============================================
+       DATA TABLE
+       ============================================ */
+    .data-table-wrapper {
+        overflow-x: auto;
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .data-table thead {
+            background: var(--gray-50);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .data-table th {
+            padding: 14px 16px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--gray-600);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--gray-200);
+        }
+
+        .data-table td {
+            padding: 14px 16px;
+            font-size: 14px;
+            color: var(--gray-700);
+            border-bottom: 1px solid var(--gray-100);
+            vertical-align: middle;
+        }
+
+        .data-table tbody tr {
+            transition: background 0.15s;
+        }
+
+            .data-table tbody tr:hover {
+                background: var(--gray-50);
+            }
+
+            .data-table tbody tr.absent-row {
+                background: rgba(239, 68, 68, 0.04);
+            }
+
+            .data-table tbody tr.weekoff-row {
+                background: rgba(107, 114, 128, 0.04);
+            }
+
+            .data-table tbody tr.leave-row {
+                background: rgba(245, 158, 11, 0.04);
+            }
+
+    /* Employee Info Cell */
+    .employee-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .employee-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 600;
+        color: white;
+        flex-shrink: 0;
+    }
+
+        .employee-avatar.present {
+            background: var(--success);
+        }
+
+        .employee-avatar.absent {
+            background: var(--danger);
+        }
+
+        .employee-avatar.late {
+            background: var(--warning);
+        }
+
+        .employee-avatar.leave {
+            background: var(--info);
+        }
+
+        .employee-avatar.default {
+            background: var(--gray-400);
+        }
+
+    .employee-details {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .employee-name {
+        font-weight: 600;
+        color: var(--gray-800);
+    }
+
+    .employee-code {
+        font-size: 12px;
+        color: var(--gray-500);
+        font-family: 'Monaco', 'Consolas', monospace;
+    }
+
+    /* Organization Cell */
+    .org-info {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .company-name {
+        font-weight: 500;
+        color: var(--gray-700);
+    }
+
+    .dept-name {
+        font-size: 12px;
+        color: var(--gray-500);
+    }
+
+    /* Shift Badge */
+    .shift-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--gray-100);
+        padding: 6px 10px;
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+        color: var(--gray-700);
+    }
+
+    /* Time Display */
+    .time-display {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: 'Monaco', 'Consolas', monospace;
+        font-size: 13px;
+    }
+
+        .time-display.in {
+            color: var(--success);
+        }
+
+            .time-display.in.late {
+                color: var(--danger);
+            }
+
+        .time-display.out {
+            color: var(--gray-700);
+        }
+
+            .time-display.out.early {
+                color: var(--warning);
+            }
+
+    .no-data {
+        color: var(--gray-400);
+    }
+
+    /* Duration */
+    .duration-value {
+        font-weight: 600;
+        color: var(--gray-800);
+    }
+
+    /* Variance Badges */
+    .variance-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+        .variance-badge.late {
+            background: var(--danger-light);
+            color: var(--danger);
+        }
+
+        .variance-badge.early {
+            background: var(--warning-light);
+            color: var(--warning);
+        }
+
+        .variance-badge.overtime {
+            background: var(--info-light);
+            color: var(--info);
+        }
+
+    /* Status Badge */
+    .status-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+        .status-badge.present {
+            background: var(--success-light);
+            color: var(--success);
+        }
+
+        .status-badge.absent {
+            background: var(--danger-light);
+            color: var(--danger);
+        }
+
+        .status-badge.weekoff {
+            background: var(--gray-200);
+            color: var(--gray-600);
+        }
+
+        .status-badge.holiday {
+            background: var(--info-light);
+            color: var(--info);
+        }
+
+        .status-badge.leave {
+            background: var(--warning-light);
+            color: var(--warning);
+        }
+
+    .alert-icon {
+        color: var(--warning);
+        animation: pulse 2s infinite;
+    }
+
+    @@keyframes pulse {
+        0%, 100%
+
+    {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+
+    }
+
+    /* Action Button */
+    .action-btn {
+        width: 36px;
+        height: 36px;
+        border: 1px solid var(--gray-200);
+        background: white;
+        border-radius: var(--radius);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--gray-600);
+        transition: all 0.2s;
+    }
+
+        .action-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+            transform: scale(1.05);
+        }
+
+    /* ============================================
+       PAGINATION
+       ============================================ */
+    .pagination-wrapper {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 24px;
+        border-top: 1px solid var(--gray-100);
+        background: var(--gray-50);
+    }
+
+    .pagination-info {
+        font-size: 14px;
+        color: var(--gray-600);
+    }
+
+    .pagination-controls {
+        display: flex;
+        gap: 4px;
+    }
+
+    .page-btn {
+        min-width: 36px;
+        height: 36px;
+        padding: 0 12px;
+        border: 1px solid var(--gray-200);
+        background: white;
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--gray-700);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+
+        .page-btn:hover:not(:disabled):not(.active) {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .page-btn.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+    /* ============================================
+       LOADING & EMPTY STATES
+       ============================================ */
+    .loading-state,
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 80px 40px;
+        text-align: center;
+    }
+
+    .loader {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .loader-spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid var(--gray-200);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    .loader-text {
+        color: var(--gray-500);
+        font-size: 14px;
+    }
+
+    .empty-icon {
+        width: 80px;
+        height: 80px;
+        background: var(--gray-100);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+    }
+
+        .empty-icon i {
+            font-size: 40px;
+            color: var(--gray-400);
+        }
+
+    .empty-state h3 {
+        color: var(--gray-800);
+        margin: 0 0 8px;
+    }
+
+    .empty-state p {
+        color: var(--gray-500);
+        margin: 0 0 24px;
+    }
+
+    .btn-primary-outline {
+        padding: 10px 20px;
+        background: white;
+        border: 2px solid var(--primary);
+        color: var(--primary);
+        border-radius: var(--radius);
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .btn-primary-outline:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+    /* ============================================
+       DEVICE LOGS SPECIFIC
+       ============================================ */
+    .direction-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+        .direction-badge.in {
+            background: var(--success-light);
+            color: var(--success);
+        }
+
+        .direction-badge.out {
+            background: var(--danger-light);
+            color: var(--danger);
+        }
+
+    .device-name {
+        font-size: 13px;
+        color: var(--gray-600);
+    }
+
+    .punch-time {
+        font-size: 13px;
+        background: var(--gray-100);
+        padding: 4px 8px;
+        border-radius: var(--radius-sm);
+    }
+
+    .temp-value {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+        .temp-value.normal {
+            color: var(--success);
+        }
+
+        .temp-value.high {
+            color: var(--danger);
+            font-weight: 600;
+        }
+
+    .mask-badge.yes {
+        color: var(--success);
+        font-size: 13px;
+    }
+
+    .location-text {
+        font-size: 12px;
+        color: var(--gray-500);
+    }
+
+    .table-footer-notice {
+        padding: 12px 24px;
+        background: var(--gray-50);
+        border-top: 1px solid var(--gray-100);
+        font-size: 13px;
+        color: var(--gray-600);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    /* ============================================
+       MODAL STYLES
+       ============================================ */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 20px;
+    }
+
+    .modal-container {
+        background: white;
+        border-radius: var(--radius-xl);
+        max-width: 700px;
+        width: 100%;
+        max-height: 90vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: var(--shadow-xl);
+        animation: modalIn 0.3s ease;
+    }
+
+    @@keyframes modalIn {
+        from
+
+    {
+        opacity: 0;
+        transform: scale(0.95) translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 24px;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+    }
+
+    .modal-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 18px;
+        font-weight: 600;
+    }
+
+    .modal-close {
+        width: 36px;
+        height: 36px;
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        border-radius: 50%;
+        color: white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: rotate(90deg);
+        }
+
+    .modal-body {
+        padding: 24px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    /* Employee Summary Card */
+    .employee-summary-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 20px;
+        background: var(--gray-50);
+        border-radius: var(--radius-lg);
+        margin-bottom: 20px;
+    }
+
+    .summary-avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        font-weight: 700;
+        color: white;
+    }
+
+    .summary-info {
+        flex: 1;
+    }
+
+        .summary-info h3 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--gray-900);
+        }
+
+        .summary-info p {
+            margin: 4px 0 0;
+            color: var(--gray-500);
+        }
+
+    .summary-status .status-badge.large {
+        padding: 8px 16px;
+        font-size: 14px;
+    }
+
+    /* Quick Stats */
+    .quick-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+    .stat-item {
+        background: white;
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius);
+        padding: 12px;
+        text-align: center;
+    }
+
+    .stat-label {
+        display: block;
+        font-size: 11px;
+        color: var(--gray-500);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+    }
+
+    .stat-value {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--gray-800);
+    }
+
+        .stat-value.highlight {
+            color: var(--primary);
+        }
+
+    /* Time In/Out */
+    .time-in-out {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        padding: 24px;
+        background: var(--gray-50);
+        border-radius: var(--radius-lg);
+        margin-bottom: 24px;
+    }
+
+    .time-block {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 24px;
+        background: white;
+        border-radius: var(--radius);
+        border: 1px solid var(--gray-200);
+    }
+
+        .time-block.in .time-icon {
+            background: var(--success-light);
+            color: var(--success);
+        }
+
+        .time-block.out .time-icon {
+            background: var(--danger-light);
+            color: var(--danger);
+        }
+
+    .time-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+    }
+
+    .time-details {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .time-label {
+        font-size: 12px;
+        color: var(--gray-500);
+        text-transform: uppercase;
+    }
+
+    .time-value {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--gray-800);
+    }
+
+    .time-note {
+        font-size: 12px;
+    }
+
+        .time-note.late {
+            color: var(--danger);
+        }
+
+        .time-note.early {
+            color: var(--warning);
+        }
+
+    .time-divider {
+        width: 40px;
+        height: 40px;
+        background: var(--primary);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 20px;
+    }
+
+    /* Section Block */
+    .section-block {
+        margin-bottom: 20px;
+    }
+
+        .section-block h4 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--gray-800);
+            margin: 0 0 12px;
+        }
+
+            .section-block h4 small {
+                font-weight: 400;
+                color: var(--gray-500);
+            }
+
+    .code-block {
+        background: var(--gray-100);
+        padding: 12px 16px;
+        border-radius: var(--radius);
+        font-family: 'Monaco', 'Consolas', monospace;
+        font-size: 13px;
+        color: var(--gray-700);
+        overflow-x: auto;
+    }
+
+    /* Punch Timeline */
+    .punch-timeline {
+        border-left: 2px solid var(--gray-200);
+        margin-left: 12px;
+        padding-left: 24px;
+    }
+
+    .timeline-item {
+        position: relative;
+        padding-bottom: 16px;
+    }
+
+        .timeline-item:last-child {
+            padding-bottom: 0;
+        }
+
+    .timeline-dot {
+        position: absolute;
+        left: -31px;
+        top: 4px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid var(--gray-200);
+        background: white;
+    }
+
+    .timeline-item.in .timeline-dot {
+        border-color: var(--success);
+        background: var(--success);
+    }
+
+    .timeline-item.out .timeline-dot {
+        border-color: var(--danger);
+        background: var(--danger);
+    }
+
+    .timeline-content {
+        background: var(--gray-50);
+        padding: 12px 16px;
+        border-radius: var(--radius);
+    }
+
+    .timeline-time {
+        font-weight: 600;
+        color: var(--gray-800);
+        margin-bottom: 4px;
+    }
+
+    .timeline-details {
+        display: flex;
+        gap: 16px;
+        font-size: 13px;
+        color: var(--gray-600);
+    }
+
+    .timeline-direction {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .timeline-item.in .timeline-direction {
+        color: var(--success);
+    }
+
+    .timeline-item.out .timeline-direction {
+        color: var(--danger);
+    }
+
+    .loading-inline {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 16px;
+        color: var(--gray-600);
+    }
+
+    .no-data-message {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 16px;
+        background: var(--warning-light);
+        border-radius: var(--radius);
+        color: var(--warning);
+        font-size: 14px;
+    }
+
+    .modal-footer {
+        padding: 16px 24px;
+        border-top: 1px solid var(--gray-100);
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .btn-secondary {
+        padding: 10px 24px;
+        background: var(--gray-100);
+        border: none;
+        border-radius: var(--radius);
+        font-weight: 600;
+        color: var(--gray-700);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .btn-secondary:hover {
+            background: var(--gray-200);
+        }
+
+    /* ============================================
+       RESPONSIVE ADJUSTMENTS
+       ============================================ */
+    @@media (max-width: 1024px) {
+        .attendance-dashboard
+
+    {
+        padding: 16px;
+    }
+
+    .header-content {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .header-left {
+        flex-direction: column;
+    }
+
+    .filter-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .quick-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .time-in-out {
+        flex-direction: column;
+    }
+
+    .time-divider {
+        transform: rotate(90deg);
+    }
+
+    }
+
+    @@media (max-width: 640px) {
+        .filter-row
+
+    {
+        grid-template-columns: 1fr;
+    }
+
+    .tabs-header {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .pagination-wrapper {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .quick-stats {
+        grid-template-columns: 1fr;
+    }
+
+    }
+</style>
+
+@code {
+    // Filter state
+    private DateTime selectedDate = DateTime.Today;
+    private int selectedCompanyId = 0;
+    private int selectedDepartmentId = 0;
+    private string selectedStatus = string.Empty;
+    private string searchTerm = string.Empty;
+    private string selectedDeviceLogTable = string.Empty;
+
+    // Data
+    private List<DailyAttendanceRecord> attendanceRecords = new();
+    private List<DeviceLogRecord> deviceLogs = new();
+    private List<PunchDetail> punchDetails = new();
+    private AttendanceSummary? summary;
+    private List<DeviceLogTableInfo> availableLogTables = new();
+    private List<CompanyDropdown> companies = new();
+    private List<DepartmentDropdown> departments = new();
+
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 50;
+    private int totalCount = 0;
+    private int totalPages => (int)Math.Ceiling((double)totalCount / pageSize);
+
+    // UI state
+    private bool isLoading = true;
+    private bool isLoadingDeviceLogs = false;
+    private bool isLoadingPunchDetails = false;
+    private bool isExporting = false;
+    private string activeTab = "attendance";
+    private string activeDeviceLogTable = string.Empty;
+
+    // Modal
+    private bool showPunchModal = false;
+    private DailyAttendanceRecord? selectedAttendance;
+
+    // Debounce
+    private System.Timers.Timer? searchTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDropdowns();
+        await LoadAvailableLogTables();
+        await LoadData();
+    }
+
+    private async Task LoadDropdowns()
+    {
+        try
+        {
+            companies = (await EmployeeRepository.GetCompaniesDropdownAsync()).ToList();
+            departments = (await EmployeeRepository.GetDepartmentsDropdownAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading dropdowns");
+        }
+    }
+
+    private async Task LoadAvailableLogTables()
+    {
+        try
+        {
+            availableLogTables = (await AttendanceRepository.GetAvailableDeviceLogTablesAsync()).ToList();
+            Logger.LogInformation("Found {Count} device log tables", availableLogTables.Count);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading available log tables");
+        }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Update active device log table name
+            UpdateActiveDeviceLogTable();
+
+            // Load attendance records
+            attendanceRecords = (await AttendanceRepository.GetDailyAttendanceAsync(
+                selectedDate,
+                selectedCompanyId > 0 ? selectedCompanyId : null,
+                selectedDepartmentId > 0 ? selectedDepartmentId : null,
+                string.IsNullOrWhiteSpace(selectedStatus) ? null : selectedStatus,
+                string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
+                currentPage,
+                pageSize
+            )).ToList();
+
+            // Load count
+            totalCount = await AttendanceRepository.GetDailyAttendanceCountAsync(
+                selectedDate,
+                selectedCompanyId > 0 ? selectedCompanyId : null,
+                selectedDepartmentId > 0 ? selectedDepartmentId : null,
+                string.IsNullOrWhiteSpace(selectedStatus) ? null : selectedStatus,
+                string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm
+            );
+
+            // Load summary
+            summary = await AttendanceRepository.GetAttendanceSummaryAsync(
+                selectedDate,
+                selectedCompanyId > 0 ? selectedCompanyId : null,
+                selectedDepartmentId > 0 ? selectedDepartmentId : null
+            );
+
+            Logger.LogInformation("Loaded {Count} attendance records for {Date}", attendanceRecords.Count, selectedDate);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading attendance data for {Date}", selectedDate);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadDeviceLogs()
+    {
+        isLoadingDeviceLogs = true;
+        StateHasChanged();
+
+        try
+        {
+            int month = selectedDate.Month;
+            int year = selectedDate.Year;
+
+            // If specific table selected, extract month/year from it
+            if (!string.IsNullOrEmpty(selectedDeviceLogTable))
+            {
+                var parts = selectedDeviceLogTable.Replace("DeviceLogs_", "").Split('_');
+                if (parts.Length == 2)
+                {
+                    int.TryParse(parts[0], out month);
+                    int.TryParse(parts[1], out year);
+                }
+            }
+
+            deviceLogs = (await AttendanceRepository.GetDeviceLogsAsync(
+                month,
+                year,
+                selectedDate,
+                null,
+                selectedCompanyId > 0 ? selectedCompanyId : null,
+                selectedDepartmentId > 0 ? selectedDepartmentId : null
+            )).ToList();
+
+            Logger.LogInformation("Loaded {Count} device logs from DeviceLogs_{Month}_{Year}", deviceLogs.Count, month, year);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading device logs");
+        }
+        finally
+        {
+            isLoadingDeviceLogs = false;
+            StateHasChanged();
+        }
+    }
+
+    private void UpdateActiveDeviceLogTable()
+    {
+        if (!string.IsNullOrEmpty(selectedDeviceLogTable))
+        {
+            activeDeviceLogTable = selectedDeviceLogTable;
+        }
+        else
+        {
+            activeDeviceLogTable = $"DeviceLogs_{selectedDate.Month}_{selectedDate.Year}";
+        }
+    }
+
+    private async Task OnDateChanged()
+    {
+        currentPage = 1;
+        deviceLogs.Clear();
+        await LoadData();
+
+        if (activeTab == "devicelogs")
+            await LoadDeviceLogs();
+    }
+
+    private async Task OnFilterChanged()
+    {
+        currentPage = 1;
+        await LoadData();
+
+        if (activeTab == "devicelogs")
+            await LoadDeviceLogs();
+    }
+
+    private async Task OnDeviceLogTableChanged()
+    {
+        UpdateActiveDeviceLogTable();
+
+        if (activeTab == "devicelogs")
+            await LoadDeviceLogs();
+    }
+
+    private void OnSearchChanged()
+    {
+        searchTimer?.Stop();
+        searchTimer?.Dispose();
+
+        searchTimer = new System.Timers.Timer(400);
+        searchTimer.Elapsed += async (s, e) =>
+        {
+            searchTimer?.Stop();
+            await InvokeAsync(async () =>
+            {
+                currentPage = 1;
+                await LoadData();
+                StateHasChanged();
+            });
+        };
+        searchTimer.AutoReset = false;
+        searchTimer.Start();
+    }
+
+    private async Task ShowPunchDetails(DailyAttendanceRecord record)
+    {
+        selectedAttendance = record;
+        showPunchModal = true;
+        isLoadingPunchDetails = true;
+        StateHasChanged();
+
+        try
+        {
+            punchDetails = (await AttendanceRepository.GetEmployeePunchDetailsAsync(
+                record.EmployeeId,
+                record.AttendanceDate
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading punch details for employee {Id}", record.EmployeeId);
+            punchDetails = new();
+        }
+        finally
+        {
+            isLoadingPunchDetails = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClosePunchModal()
+    {
+        showPunchModal = false;
+        selectedAttendance = null;
+        punchDetails.Clear();
+    }
+
+    private async Task GoToPage(int page)
+    {
+        if (page < 1 || page > totalPages || page == currentPage) return;
+        currentPage = page;
+        await LoadData();
+    }
+
+    private IEnumerable<int> GetVisiblePages()
+    {
+        int start = Math.Max(1, currentPage - 2);
+        int end = Math.Min(totalPages, currentPage + 2);
+        return Enumerable.Range(start, end - start + 1);
+    }
+
+    private async Task ExportReport()
+    {
+        // TODO: Implement export
+        isExporting = true;
+        StateHasChanged();
+        await Task.Delay(1000);
+        isExporting = false;
+    }
+
+    private string GetAttendanceRowClass(DailyAttendanceRecord record)
+    {
+        if (record.Absent > 0) return "table-danger";
+        if (record.WeeklyOff == 1) return "table-secondary";
+        if (record.Holiday == 1) return "table-info";
+        if (record.IsOnLeave == 1) return "table-warning";
+        if (record.LateBy > 0) return "";
+        return "";
+    }
+
+    private string GetStatusBadgeClass(string statusCode) => statusCode?.ToUpper() switch
+    {
+        "P" => "bg-success",
+        "A" => "bg-danger",
+        "WO" => "bg-secondary",
+        "H" => "bg-info",
+        "L" => "bg-warning text-dark",
+        "HD" => "bg-warning text-dark",
+        "MP" => "bg-dark",
+        _ => "bg-secondary"
+    };
+
+    private string? TruncateText(string? text, int max)
+    {
+        if (string.IsNullOrEmpty(text)) return null;
+        return text.Length <= max ? text : text[..(max - 3)] + "...";
+    }
+
+    public void Dispose()
+    {
+        searchTimer?.Dispose();
+    }
+}

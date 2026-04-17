@@ -1,0 +1,473 @@
+﻿@inherits LayoutComponentBase
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject IAuthService AuthService
+@implements IAsyncDisposable
+
+<MudThemeProvider IsDarkMode="@isDarkTheme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<CascadingAuthenticationState>
+
+    <MudLayout>
+
+        <!-- ================= SIDEBAR ================= -->
+        <MudDrawer @bind-Open="sidebarOpen"
+                   Variant="DrawerVariant.Responsive"
+                   Elevation="3"
+                   Class="pa-2">
+
+            <MudText Typo="Typo.h6" Class="pa-3 fw-bold">
+                EMS
+            </MudText>
+
+            <MudNavMenu>
+
+                <!-- ================= MAIN SECTION ================= -->
+                <MudText Typo="Typo.overline" Class="px-3 mt-2" Style="color: #888;">
+                    Main
+                </MudText>
+
+                <MudNavLink Href="/dashboard" Icon="@Icons.Material.Filled.Dashboard">
+                    Dashboard
+                </MudNavLink>
+
+                <MudNavLink Href="/employees" Icon="@Icons.Material.Filled.People">
+                    Employees
+                </MudNavLink>
+
+                <MudNavLink Href="/attendance" Icon="@Icons.Material.Filled.AccessTime">
+                    Attendance
+                </MudNavLink>
+
+                <!-- ================= DATA SECTION ================= -->
+                <MudText Typo="Typo.overline" Class="px-3 mt-4" Style="color: #888;">
+                    Data
+                </MudText>
+
+                <MudNavLink Href="/upload" Icon="@Icons.Material.Filled.CloudUpload">
+                    Upload Excel
+                </MudNavLink>
+
+                <MudNavLink Href="/reports" Icon="@Icons.Material.Filled.Assessment">
+                    Reports
+                </MudNavLink>
+
+                <!-- ================= WHATSAPP SECTION ================= -->
+                <MudText Typo="Typo.overline" Class="px-3 mt-4" Style="color: #888;">
+                    WhatsApp
+                </MudText>
+
+                <MudNavGroup Title="WhatsApp" Icon="@Icons.Custom.Brands.WhatsApp" 
+                             Expanded="@isWhatsAppExpanded"
+                             ExpandedChanged="@((bool e) => isWhatsAppExpanded = e)"
+                             Style="color: #25D366;">
+
+                    <MudNavLink Href="/whatsappdashboard" Icon="@Icons.Material.Filled.GridView">
+                        Dashboard
+                    </MudNavLink>
+
+                    <MudNavLink Href="/bulksend" Icon="@Icons.Material.Filled.Send">
+                        Bulk Send
+                    </MudNavLink>
+
+                    <MudDivider Class="my-2" />
+
+                    <!-- Teacher Absence Section -->
+                    <MudText Typo="Typo.caption" Class="px-4 py-1" Style="color: #666; font-size: 10px;">
+                        TEACHER ABSENCE
+                    </MudText>
+
+                    <MudNavLink Href="/absence" Icon="@Icons.Material.Filled.Campaign">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <MudText>Send Notification</MudText>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success"
+                                     Style="font-size: 9px; height: 18px;">NEW</MudChip>
+                        </MudStack>
+                    </MudNavLink>
+
+                    <MudNavLink Href="/messagestatus" Icon="@Icons.Material.Filled.TrackChanges">
+                        Message Status
+                    </MudNavLink>
+
+                    <MudNavLink Href="/absencehistory" Icon="@Icons.Material.Filled.HistoryEdu">
+                        Absence History
+                    </MudNavLink>
+
+                    <MudDivider Class="my-2" />
+
+                    <!-- Settings Section -->
+                    <MudText Typo="Typo.caption" Class="px-4 py-1" Style="color: #666; font-size: 10px;">
+                        SETTINGS
+                    </MudText>
+
+                    <MudNavLink Href="/whatsappsettings" Icon="@Icons.Material.Filled.Settings">
+                        WhatsApp Settings
+                    </MudNavLink>
+
+                    <MudNavLink Href="/whatsapphistory" Icon="@Icons.Material.Filled.History">
+                        All History
+                    </MudNavLink>
+
+                </MudNavGroup>
+
+                <!-- ================= SETTINGS SECTION ================= -->
+                <MudText Typo="Typo.overline" Class="px-3 mt-4" Style="color: #888;">
+                    Settings
+                </MudText>
+
+                <MudNavLink Href="/profile" Icon="@Icons.Material.Filled.Person">
+                    Profile
+                </MudNavLink>
+
+                <MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Settings">
+                    Settings
+                </MudNavLink>
+
+            </MudNavMenu>
+
+            <!-- ================= SIDEBAR FOOTER ================= -->
+            <MudSpacer />
+            
+            <MudDivider Class="my-2" />
+            
+            <MudPaper Class="pa-3 ma-2" Style="background: rgba(0,0,0,0.05); border-radius: 12px;">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudAvatar Color="Color.Primary" Size="Size.Small">
+                        @GetUserInitials()
+                    </MudAvatar>
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.body2" Style="font-weight: 600;">
+                            @GetCurrentUserName()
+                        </MudText>
+                        <MudText Typo="Typo.caption" Style="color: #888;">
+                            @GetUserRole()
+                        </MudText>
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+
+        </MudDrawer>
+
+        <!-- ================= MAIN ================= -->
+        <MudMainContent>
+
+            <!-- ================= TOP BAR ================= -->
+            <MudAppBar Elevation="2" Dense="true">
+
+                <!-- MENU BUTTON -->
+                <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                               Color="Color.Inherit"
+                               Edge="Edge.Start"
+                               OnClick="ToggleSidebar" />
+
+                <MudText Typo="Typo.h6" Class="ml-2">
+                    Employee Management System
+                </MudText>
+
+                <MudSpacer />
+
+                <!-- SEARCH -->
+                <MudTextField @bind-Value="searchQuery"
+                              Placeholder="Search..."
+                              Variant="Variant.Outlined"
+                              Dense="true"
+                              Immediate="true"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Style="max-width:250px" />
+
+                <!-- QUICK ACCESS - Send Notification -->
+                <MudTooltip Text="Send Absence Notification">
+                    <MudIconButton Icon="@Icons.Material.Filled.Campaign"
+                                   Color="Color.Success"
+                                   OnClick="@(() => Navigation.NavigateTo("/absence"))" />
+                </MudTooltip>
+
+                <!-- THEME -->
+                <MudIconButton Icon="@(isDarkTheme ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                               Color="Color.Inherit"
+                               OnClick="ToggleTheme"
+                               Title="Toggle Theme" />
+
+                <!-- NOTIFICATIONS -->
+                <MudMenu Icon="@Icons.Material.Filled.Notifications">
+                    <MudBadge Content="@notifications.Count" Color="Color.Error" Overlap="true">
+                    </MudBadge>
+                    @if (notifications.Any())
+                    {
+                        @foreach (var n in notifications)
+                        {
+                            <MudMenuItem>
+                                <MudStack Spacing="0">
+                                    <MudText Typo="Typo.body2" Style="font-weight: 500;">@n.Title</MudText>
+                                    <MudText Typo="Typo.caption" Style="color: #888;">@n.Description</MudText>
+                                </MudStack>
+                            </MudMenuItem>
+                        }
+                        <MudDivider />
+                        <MudMenuItem OnClick="ClearNotifications">
+                            <MudText Typo="Typo.caption" Color="Color.Primary">Clear All</MudText>
+                        </MudMenuItem>
+                    }
+                    else
+                    {
+                        <MudMenuItem Disabled="true">
+                            <MudText Typo="Typo.caption">No Notifications</MudText>
+                        </MudMenuItem>
+                    }
+                </MudMenu>
+
+                <!-- USER MENU -->
+                <MudMenu Icon="@Icons.Material.Filled.AccountCircle">
+
+                    <MudMenuItem Disabled="true">
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.body2" Style="font-weight: 600;">@GetCurrentUserName()</MudText>
+                            <MudText Typo="Typo.caption" Style="color: #888;">@GetUserRole()</MudText>
+                        </MudStack>
+                    </MudMenuItem>
+
+                    <MudDivider />
+
+                    <MudMenuItem Icon="@Icons.Material.Filled.Person" OnClick="NavigateToProfile">
+                        Profile
+                    </MudMenuItem>
+
+                    <MudMenuItem Icon="@Icons.Material.Filled.Settings" OnClick="NavigateToSettings">
+                        Settings
+                    </MudMenuItem>
+
+                    <MudDivider />
+
+                    <MudMenuItem Icon="@Icons.Material.Filled.Logout" 
+                                 IconColor="Color.Error" 
+                                 OnClick="HandleLogout">
+                        <MudText Color="Color.Error">Logout</MudText>
+                    </MudMenuItem>
+
+                </MudMenu>
+
+            </MudAppBar>
+
+            <!-- ================= BREADCRUMB ================= -->
+            <MudPaper Class="px-4 py-2" Elevation="0" Style="background: transparent;">
+                <MudBreadcrumbs Items="@GetBreadcrumbs()">
+                    <ItemTemplate Context="item">
+                        <MudLink Href="@item.Href">@item.Text</MudLink>
+                    </ItemTemplate>
+                </MudBreadcrumbs>
+            </MudPaper>
+
+            <!-- ================= CONTENT ================= -->
+            <MudContainer MaxWidth="MaxWidth.False" Class="mt-2 px-4">
+
+                @Body
+
+            </MudContainer>
+
+            <!-- ================= FOOTER ================= -->
+            <MudPaper Class="pa-3 text-center mt-4" Elevation="0">
+                <MudText Typo="Typo.caption">
+                    © @DateTime.Now.Year EMS - Employee Management System | Version 1.0
+                </MudText>
+            </MudPaper>
+
+        </MudMainContent>
+
+    </MudLayout>
+
+</CascadingAuthenticationState>
+
+<!-- ================= FLOATING ACTION BUTTON ================= -->
+<MudFab Color="Color.Success"
+        StartIcon="@Icons.Material.Filled.Campaign"
+        Style="position: fixed; bottom: 24px; right: 24px; z-index: 1000;"
+        OnClick="@(() => Navigation.NavigateTo("/absence"))"
+        Title="Send Absence Notification" />
+
+@code {
+
+    // ================= STATE =================
+    private bool sidebarOpen = true;
+    private bool isDarkTheme = false;
+    private bool isWhatsAppExpanded = true; // WhatsApp menu expanded by default
+    private string searchQuery = "";
+
+    private List<NotificationItem> notifications = new();
+
+    private class NotificationItem
+    {
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+        public DateTime Time { get; set; } = DateTime.Now;
+    }
+
+    // ================= LIFECYCLE =================
+    protected override void OnInitialized()
+    {
+        LoadNotifications();
+        CheckWhatsAppExpanded();
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    // ================= LOCATION CHANGED =================
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        CheckWhatsAppExpanded();
+        InvokeAsync(StateHasChanged);
+    }
+
+    // ================= CHECK WHATSAPP EXPANDED =================
+    private void CheckWhatsAppExpanded()
+    {
+        var currentPath = new Uri(Navigation.Uri).AbsolutePath.ToLower();
+        
+        var whatsAppPaths = new[]
+        {
+            "/whatsappdashboard",
+            "/bulksend",
+            "/absence",
+            "/messagestatus",
+            "/whatsappsettings",
+            "/whatsapphistory"
+        };
+        
+        if (whatsAppPaths.Any(p => currentPath.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+        {
+            isWhatsAppExpanded = true;
+        }
+    }
+
+    // ================= SIDEBAR =================
+    private void ToggleSidebar()
+    {
+        sidebarOpen = !sidebarOpen;
+    }
+
+    // ================= THEME =================
+    private async Task ToggleTheme()
+    {
+        isDarkTheme = !isDarkTheme;
+
+        try
+        {
+            await JS.InvokeVoidAsync("themeManager.setTheme", isDarkTheme);
+        }
+        catch { }
+    }
+
+    // ================= NAVIGATION =================
+    private void NavigateToProfile()
+    {
+        Navigation.NavigateTo("/profile");
+    }
+
+    private void NavigateToSettings()
+    {
+        Navigation.NavigateTo("/settings");
+    }
+
+    // ================= BREADCRUMBS =================
+    private List<BreadcrumbItem> GetBreadcrumbs()
+    {
+        var path = new Uri(Navigation.Uri).AbsolutePath;
+        var breadcrumbs = new List<BreadcrumbItem>
+        {
+            new BreadcrumbItem("Home", "/dashboard", false, Icons.Material.Filled.Home)
+        };
+
+        var pathMappings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "/dashboard", "Dashboard" },
+            { "/employees", "Employees" },
+            { "/attendance", "Attendance" },
+            { "/upload", "Upload Excel" },
+            { "/reports", "Reports" },
+            { "/whatsappdashboard", "WhatsApp Dashboard" },
+            { "/bulksend", "Bulk Send" },
+            { "/absence", "Send Notification" },
+            { "/messagestatus", "Message Status" },
+            { "/whatsappsettings", "WhatsApp Settings" },
+            { "/whatsapphistory", "All History" },
+            { "/profile", "Profile" },
+            { "/settings", "Settings" }
+        };
+
+        if (pathMappings.TryGetValue(path, out var pageName))
+        {
+            breadcrumbs.Add(new BreadcrumbItem(pageName, path, true));
+        }
+
+        return breadcrumbs;
+    }
+
+    // ================= USER =================
+    private string GetCurrentUserName()
+    {
+        return AuthService?.CurrentUser?.FullName ?? "Admin";
+    }
+
+    private string GetUserRole()
+    {
+        return AuthService?.IsAdmin == true ? "Administrator" : "User";
+    }
+
+    private string GetUserInitials()
+    {
+        try
+        {
+            var name = AuthService?.CurrentUser?.FullName ?? "U";
+            var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2)
+                return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+            return name.Length >= 2 ? name[..2].ToUpper() : name.ToUpper();
+        }
+        catch
+        {
+            return "U";
+        }
+    }
+
+    // ================= LOGOUT =================
+    private async Task HandleLogout()
+    {
+        try
+        {
+            await AuthService.LogoutAsync();
+        }
+        catch { }
+
+        Navigation.NavigateTo("/login", true);
+    }
+
+    // ================= NOTIFICATIONS =================
+    private void LoadNotifications()
+    {
+        notifications = new List<NotificationItem>
+        {
+            new() { Title = "New Employee Added", Description = "John Doe added", Time = DateTime.Now.AddMinutes(-5) },
+            new() { Title = "Attendance Updated", Description = "Today marked", Time = DateTime.Now.AddHours(-1) },
+            new() { Title = "WhatsApp Sent", Description = "50 messages delivered", Time = DateTime.Now.AddHours(-2) }
+        };
+    }
+
+    private void ClearNotifications()
+    {
+        notifications.Clear();
+    }
+
+    // ================= DISPOSE =================
+    public async ValueTask DisposeAsync()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+        
+        try
+        {
+            await JS.InvokeVoidAsync("disposeMainLayout");
+        }
+        catch { }
+    }
+}

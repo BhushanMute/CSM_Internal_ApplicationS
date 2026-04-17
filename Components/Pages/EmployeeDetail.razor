@@ -1,0 +1,2478 @@
+﻿@page "/employee/{EmployeeCode}"
+@using Microsoft.AspNetCore.Authorization
+@using CSMTutorial.Data.Repositories
+@using CSMTutorial.Models
+
+@attribute [Authorize]
+
+@inject IEmployeeRepository EmployeeRepository
+@inject NavigationManager Navigation
+@inject ILogger<EmployeeDetail> Logger
+
+<PageTitle>@(isEditMode ? "Edit Employee" : "Employee Details") | HR Portal</PageTitle>
+
+<div class="ed-container">
+    <!-- Animated Background Gradient -->
+    <div class="ed-bg-gradient"></div>
+
+    <!-- Top Navigation Bar -->
+    <div class="ed-topbar">
+        <div class="ed-topbar-left">
+            <button class="ed-back-btn" @onclick="GoBack" title="Back to Employees">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7" />
+                </svg>
+            </button>
+            <nav class="ed-breadcrumb">
+                <a href="/employees" class="ed-breadcrumb-link">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                    Employees
+                </a>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="ed-breadcrumb-sep">
+                    <path d="M9 18l6-6-6-6" />
+                </svg>
+                <span class="ed-breadcrumb-current">@EmployeeCode</span>
+            </nav>
+        </div>
+        <div class="ed-topbar-right">
+            @if (!isEditMode && employee != null)
+            {
+                <button class="ed-action-btn ed-action-edit" @onclick="EnableEditMode">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    Edit Profile
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="ed-loading-container">
+            <div class="ed-loading-card">
+                <div class="ed-pulse-loader">
+                    <div class="ed-pulse-ring"></div>
+                    <div class="ed-pulse-ring"></div>
+                    <div class="ed-pulse-ring"></div>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="ed-pulse-icon">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                    </svg>
+                </div>
+                <p class="ed-loading-text">Loading employee profile...</p>
+            </div>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="ed-alert ed-alert-error ed-fade-in">
+            <div class="ed-alert-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="15" y1="9" x2="9" y2="15" />
+                    <line x1="9" y1="9" x2="15" y2="15" />
+                </svg>
+            </div>
+            <div class="ed-alert-content">
+                <strong>Something went wrong</strong>
+                <p>@errorMessage</p>
+            </div>
+            <button class="ed-alert-close" @onclick="() => errorMessage = null">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+            </button>
+        </div>
+    }
+    else if (employee == null)
+    {
+        <div class="ed-empty-state ed-fade-in">
+            <div class="ed-empty-illustration">
+                <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M16 16s-1.5-2-4-2-4 2-4 2" />
+                    <line x1="9" y1="9" x2="9.01" y2="9" />
+                    <line x1="15" y1="9" x2="15.01" y2="9" />
+                </svg>
+            </div>
+            <h3>Employee Not Found</h3>
+            <p>We couldn't find an employee with code <strong>@EmployeeCode</strong></p>
+            <button class="ed-action-btn ed-action-primary" @onclick="GoBack">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7" />
+                </svg>
+                Back to Directory
+            </button>
+        </div>
+    }
+    else
+    {
+        @if (successMessage != null)
+        {
+            <div class="ed-alert ed-alert-success ed-slide-down">
+                <div class="ed-alert-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                        <polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+                </div>
+                <div class="ed-alert-content">
+                    <strong>Success!</strong>
+                    <p>@successMessage</p>
+                </div>
+                <button class="ed-alert-close" @onclick="() => successMessage = null">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+                <div class="ed-alert-progress"></div>
+            </div>
+        }
+
+        <!-- Profile Hero Section -->
+        <div class="ed-hero ed-fade-in">
+            <div class="ed-hero-bg">
+                <div class="ed-hero-pattern"></div>
+            </div>
+            <div class="ed-hero-content">
+                <div class="ed-avatar-section">
+                    <div class="ed-avatar @(employee.Gender == "Female" ? "ed-avatar-female" : "ed-avatar-male")">
+                        <span>@GetInitials(employee.EmployeeName)</span>
+                        <div class="ed-avatar-status @(employee.Status == "Active" ? "ed-status-active" : "ed-status-inactive")"></div>
+                    </div>
+                    <div class="ed-hero-info">
+                        <h1 class="ed-hero-name">@employee.EmployeeName</h1>
+                        <p class="ed-hero-role">@(employee.Designation ?? "No Designation")</p>
+                        <div class="ed-hero-meta">
+                            <span class="ed-meta-item">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                                </svg>
+                                @(employee.Department ?? "N/A")
+                            </span>
+                            <span class="ed-meta-divider">•</span>
+                            <span class="ed-meta-item">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                                    <circle cx="12" cy="10" r="3" />
+                                </svg>
+                                @(employee.Location ?? "N/A")
+                            </span>
+                            <span class="ed-meta-divider">•</span>
+                            <span class="ed-meta-item">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                    <line x1="16" y1="2" x2="16" y2="6" />
+                                    <line x1="8" y1="2" x2="8" y2="6" />
+                                    <line x1="3" y1="10" x2="21" y2="10" />
+                                </svg>
+                                Joined @(employee.DOJ?.ToString("MMM yyyy") ?? "N/A")
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="ed-hero-badges">
+                    <span class="ed-badge ed-badge-code">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                        </svg>
+                        @employee.EmployeeCode
+                    </span>
+                    <span class="ed-badge @(employee.Status == "Active" ? "ed-badge-active" : "ed-badge-inactive")">
+                        <span class="ed-badge-dot"></span>
+                        @employee.Status
+                    </span>
+                    @if (!string.IsNullOrEmpty(employee.EmployementType))
+                    {
+                        <span class="ed-badge ed-badge-type">@employee.EmployementType</span>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="ed-stats-row ed-fade-in" style="animation-delay: 0.1s">
+            <div class="ed-stat-card">
+                <div class="ed-stat-icon ed-stat-icon-blue">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                        <line x1="16" y1="2" x2="16" y2="6" />
+                        <line x1="8" y1="2" x2="8" y2="6" />
+                        <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
+                </div>
+                <div class="ed-stat-info">
+                    <span class="ed-stat-label">Tenure</span>
+                    <span class="ed-stat-value">@GetTenure(employee.DOJ)</span>
+                </div>
+            </div>
+            <div class="ed-stat-card">
+                <div class="ed-stat-icon ed-stat-icon-green">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                </div>
+                <div class="ed-stat-info">
+                    <span class="ed-stat-label">Department</span>
+                    <span class="ed-stat-value">@(employee.Department ?? "N/A")</span>
+                </div>
+            </div>
+            <div class="ed-stat-card">
+                <div class="ed-stat-icon ed-stat-icon-purple">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                </div>
+                <div class="ed-stat-info">
+                    <span class="ed-stat-label">Grade</span>
+                    <span class="ed-stat-value">@(employee.Grade ?? "N/A")</span>
+                </div>
+            </div>
+            <div class="ed-stat-card">
+                <div class="ed-stat-icon ed-stat-icon-orange">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                    </svg>
+                </div>
+                <div class="ed-stat-info">
+                    <span class="ed-stat-label">Experience</span>
+                    <span class="ed-stat-value">@(employee.OverallExperience ?? "N/A")</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Layout -->
+        <div class="ed-layout">
+            <!-- Left Column - Main Content -->
+            <div class="ed-main-col">
+                <EditForm Model="employee" OnValidSubmit="HandleSave">
+                    <DataAnnotationsValidator />
+
+                    @if (isEditMode)
+                    {
+                        <div class="ed-edit-banner ed-slide-down">
+                            <div class="ed-edit-banner-content">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                                <span>You are currently editing this profile. Make your changes and save.</span>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Section: Personal Information -->
+                    <div class="ed-section ed-fade-in" style="animation-delay: 0.15s">
+                        <div class="ed-section-header">
+                            <div class="ed-section-icon ed-section-icon-blue">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                    <circle cx="12" cy="7" r="4" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="ed-section-title">Personal Information</h3>
+                                <p class="ed-section-subtitle">Basic details and identification</p>
+                            </div>
+                        </div>
+                        <div class="ed-section-body">
+                            <div class="ed-form-grid">
+                                <div class="ed-field">
+                                    <label class="ed-label">Employee Code</label>
+                                    <div class="ed-readonly-field">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                        </svg>
+                                        @employee.EmployeeCode
+                                    </div>
+                                </div>
+
+                                <div class="ed-field">
+                                    <label class="ed-label">Full Name @RequiredStar()</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputText class="ed-input" @bind-Value="employee.EmployeeName" placeholder="Enter full name" />
+                                        <ValidationMessage For="@(() => employee.EmployeeName)" class="ed-validation-msg" />
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value">@employee.EmployeeName</div>
+                                    }
+                                </div>
+
+                                <div class="ed-field">
+                                    <label class="ed-label">Gender</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputSelect class="ed-input ed-select" @bind-Value="employee.Gender">
+                                            <option value="">Select Gender</option>
+                                            <option value="Male">Male</option>
+                                            <option value="Female">Female</option>
+                                        </InputSelect>
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value">
+                                            @if (!string.IsNullOrEmpty(employee.Gender))
+                                            {
+                                                <span class="ed-inline-badge @(employee.Gender == "Male" ? "ed-inline-blue" : "ed-inline-pink")">
+                                                    @employee.Gender
+                                                </span>
+                                            }
+                                            else
+                                            {
+
+                                                <span class="ed-empty">Not specified</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="ed-field">
+                                    <label class="ed-label">Date of Birth</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputDate class="ed-input" @bind-Value="employee.DOB" />
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value">@(employee.DOB?.ToString("MMMM dd, yyyy") ?? EmptyText())</div>
+                                    }
+                                </div>
+
+                                <div class="ed-field">
+                                    <label class="ed-label">Marital Status</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputSelect class="ed-input ed-select" @bind-Value="employee.MaritalStatus">
+                                            <option value="">Select Status</option>
+                                            <option value="Single">Single</option>
+                                            <option value="Married">Married</option>
+                                            <option value="Divorced">Divorced</option>
+                                            <option value="Widowed">Widowed</option>
+                                        </InputSelect>
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value">@(employee.MaritalStatus ?? EmptyText())</div>
+                                    }
+                                </div>
+
+                                <div class="ed-field">
+                                    <label class="ed-label">Blood Group</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputSelect class="ed-input ed-select" @bind-Value="employee.BloodGroup">
+                                            <option value="">Select Blood Group</option>
+                                            <option value="A+">A+</option>
+                                            <option value="A-">A-</option>
+                                            <option value="B+">B+</option>
+                                            <option value="B-">B-</option>
+                                            <option value="AB+">AB+</option>
+                                            <option value="AB-">AB-</option>
+                                            <option value="O+">O+</option>
+                                            <option value="O-">O-</option>
+                                        </InputSelect>
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value">
+                                            @if (!string.IsNullOrEmpty(employee.BloodGroup))
+                                            {
+                                                <span class="ed-inline-badge ed-inline-red">🩸 @employee.BloodGroup</span>
+                                            }
+                                            else
+                                            {
+
+                                                <span class="ed-empty">Not specified</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="ed-field">
+                                    <label class="ed-label">Place of Birth</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputText class="ed-input" @bind-Value="employee.PlaceOfBirth" placeholder="Enter place of birth" />
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value">@(employee.PlaceOfBirth ?? EmptyText())</div>
+                                    }
+                                </div>
+
+                                <div class="ed-field">
+                                    <label class="ed-label">Nationality</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputText class="ed-input" @bind-Value="employee.Nationality" placeholder="Enter nationality" />
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value">@(employee.Nationality ?? EmptyText())</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section: Employment Details -->
+                    <div class="ed-section ed-fade-in" style="animation-delay: 0.2s">
+                        <div class="ed-section-header">
+                            <div class="ed-section-icon ed-section-icon-green">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="ed-section-title">Employment Details</h3>
+                                <p class="ed-section-subtitle">Organization and role information</p>
+                            </div>
+                        </div>
+                        <div class="ed-section-body">
+                            <div class="ed-form-grid">
+                                @foreach (var field in GetEmploymentFields())
+                                {
+                                    <div class="ed-field">
+                                        <label class="ed-label">@field.Label</label>
+                                        @if (isEditMode && field.Editable)
+                                        {
+                                            if (field.Key == "Status")
+                                            {
+                                                <InputSelect class="ed-input ed-select" @bind-Value="employee.Status">
+                                                    <option value="Active">Active</option>
+                                                    <option value="Inactive">Inactive</option>
+                                                </InputSelect>
+                                            }
+                                            else if (field.Key == "DOJ")
+                                            {
+                                                <InputDate class="ed-input" @bind-Value="employee.DOJ" />
+                                            }
+                                            else
+                                            {
+                                                <input type="text" class="ed-input" value="@field.Value"
+                                                       @onchange="(e) => SetFieldValue(field.Key, e.Value?.ToString())"
+                                                       placeholder="@($"Enter {field.Label.ToLower()}")" />
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <div class="ed-value">
+                                                @if (field.Key == "Status")
+                                                {
+                                                    <span class="ed-inline-badge @(employee.Status == "Active" ? "ed-inline-green" : "ed-inline-gray")">
+                                                        <span class="ed-badge-dot"></span>
+                                                        @employee.Status
+                                                    </span>
+                                                }
+                                                else if (field.Key == "DOJ")
+                                                {
+                                                    @(employee.DOJ?.ToString("MMMM dd, yyyy") ?? EmptyText())
+                                                }
+                                                else
+                                                {
+                                                    @(string.IsNullOrEmpty(field.Value) ? EmptyText() : field.Value)
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section: Contact Information -->
+                    <div class="ed-section ed-fade-in" style="animation-delay: 0.25s">
+                        <div class="ed-section-header">
+                            <div class="ed-section-icon ed-section-icon-purple">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="ed-section-title">Contact Information</h3>
+                                <p class="ed-section-subtitle">Communication and address details</p>
+                            </div>
+                        </div>
+                        <div class="ed-section-body">
+                            <div class="ed-form-grid">
+                                <div class="ed-field">
+                                    <label class="ed-label">Email Address</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputText class="ed-input" @bind-Value="employee.Email" type="email" placeholder="email@company.com" />
+                                        <ValidationMessage For="@(() => employee.Email)" class="ed-validation-msg" />
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value ed-value-link">
+                                            @if (!string.IsNullOrEmpty(employee.Email))
+                                            {
+                                                <a href="mailto:@employee.Email">@employee.Email</a>
+                                            }
+                                            else
+                                            {
+
+                                                <span class="ed-empty">Not specified</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="ed-field">
+                                    <label class="ed-label">Contact Number</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputText class="ed-input" @bind-Value="employee.ContactNo" placeholder="Enter contact number" />
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value">@(employee.ContactNo ?? EmptyText())</div>
+                                    }
+                                </div>
+
+                                <div class="ed-field">
+                                    <label class="ed-label">Emergency Contact</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputText class="ed-input" @bind-Value="employee.EmergencyContact" placeholder="Enter emergency contact" />
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value">@(employee.EmergencyContact ?? EmptyText())</div>
+                                    }
+                                </div>
+
+                                <div class="ed-field">
+                                    <label class="ed-label">Extension Number</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputText class="ed-input" @bind-Value="employee.ExtensionNo" placeholder="Enter extension" />
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value">@(employee.ExtensionNo ?? EmptyText())</div>
+                                    }
+                                </div>
+
+                                <div class="ed-field ed-field-full">
+                                    <label class="ed-label">Residential Address</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputTextArea class="ed-input ed-textarea" @bind-Value="employee.ResidentialAddress" rows="2" placeholder="Enter residential address" />
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value">@(employee.ResidentialAddress ?? EmptyText())</div>
+                                    }
+                                </div>
+
+                                <div class="ed-field ed-field-full">
+                                    <label class="ed-label">Permanent Address</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputTextArea class="ed-input ed-textarea" @bind-Value="employee.PermanentAddress" rows="2" placeholder="Enter permanent address" />
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value">@(employee.PermanentAddress ?? EmptyText())</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section: Family Information -->
+                    <div class="ed-section ed-fade-in" style="animation-delay: 0.3s">
+                        <div class="ed-section-header">
+                            <div class="ed-section-icon ed-section-icon-orange">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                    <circle cx="9" cy="7" r="4" />
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="ed-section-title">Family & Nominees</h3>
+                                <p class="ed-section-subtitle">Family members and nominee details</p>
+                            </div>
+                        </div>
+                        <div class="ed-section-body">
+                            <div class="ed-form-grid">
+                                @foreach (var field in GetFamilyFields())
+                                {
+                                    <div class="ed-field">
+                                        <label class="ed-label">@field.Label</label>
+                                        @if (isEditMode)
+                                        {
+                                            <input type="text" class="ed-input" value="@field.Value"
+                                                   @onchange="(e) => SetFieldValue(field.Key, e.Value?.ToString())"
+                                                   placeholder="@($"Enter {field.Label.ToLower()}")" />
+                                        }
+                                        else
+                                        {
+                                            <div class="ed-value">@(string.IsNullOrEmpty(field.Value) ? EmptyText() : field.Value)</div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section: Documents & Additional -->
+                    <div class="ed-section ed-fade-in" style="animation-delay: 0.35s">
+                        <div class="ed-section-header">
+                            <div class="ed-section-icon ed-section-icon-teal">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                    <line x1="16" y1="13" x2="8" y2="13" />
+                                    <line x1="16" y1="17" x2="8" y2="17" />
+                                    <polyline points="10 9 9 9 8 9" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="ed-section-title">Documents & Additional</h3>
+                                <p class="ed-section-subtitle">Identity documents and qualifications</p>
+                            </div>
+                        </div>
+                        <div class="ed-section-body">
+                            <div class="ed-form-grid">
+                                <div class="ed-field">
+                                    <label class="ed-label">Aadhaar Number</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputText class="ed-input" @bind-Value="employee.AadhaarNumber" placeholder="XXXX XXXX XXXX" />
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value ed-value-mono">@(MaskAadhaar(employee.AadhaarNumber))</div>
+                                    }
+                                </div>
+
+                                <div class="ed-field">
+                                    <label class="ed-label">Passport Number</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputText class="ed-input" @bind-Value="employee.PassportNumber" placeholder="Enter passport number" />
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value ed-value-mono">@(employee.PassportNumber ?? EmptyText())</div>
+                                    }
+                                </div>
+
+                                <div class="ed-field ed-field-full">
+                                    <label class="ed-label">Qualifications</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputTextArea class="ed-input ed-textarea" @bind-Value="employee.Qualifications" rows="2" placeholder="Enter qualifications" />
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value">@(employee.Qualifications ?? EmptyText())</div>
+                                    }
+                                </div>
+
+                                <div class="ed-field ed-field-full">
+                                    <label class="ed-label">Remarks</label>
+                                    @if (isEditMode)
+                                    {
+                                        <InputTextArea class="ed-input ed-textarea" @bind-Value="employee.Remarks" rows="2" placeholder="Enter any remarks" />
+                                    }
+                                    else
+                                    {
+                                        <div class="ed-value">@(employee.Remarks ?? EmptyText())</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Edit Mode Action Bar -->
+                    @if (isEditMode)
+                    {
+                        <div class="ed-action-bar ed-slide-up">
+                            <div class="ed-action-bar-left">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <line x1="12" y1="16" x2="12" y2="12" />
+                                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                                </svg>
+                                <span>Unsaved changes will be lost if you navigate away</span>
+                            </div>
+                            <div class="ed-action-bar-right">
+                                <button type="button" class="ed-btn ed-btn-ghost" @onclick="CancelEdit" disabled="@isSaving">
+                                    Cancel
+                                </button>
+                                <button type="submit" class="ed-btn ed-btn-primary" disabled="@isSaving">
+                                    @if (isSaving)
+                                    {
+                                        <div class="ed-btn-spinner"></div>
+                                        <span>Saving...</span>
+                                    }
+                                    else
+                                    {
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                                            <polyline points="17 21 17 13 7 13 7 21" />
+                                            <polyline points="7 3 7 8 15 8" />
+                                        </svg>
+                                        <span>Save Changes</span>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </EditForm>
+            </div>
+
+            <!-- Right Column - Sidebar -->
+            <div class="ed-sidebar-col">
+                <!-- Contact Quick Card -->
+                <div class="ed-sidebar-card ed-fade-in" style="animation-delay: 0.2s">
+                    <div class="ed-sidebar-card-header">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                            <polyline points="22,6 12,13 2,6" />
+                        </svg>
+                        <span>Quick Contact</span>
+                    </div>
+                    <div class="ed-sidebar-card-body">
+                        @if (!string.IsNullOrEmpty(employee.Email))
+                        {
+                            <a href="mailto:@employee.Email" class="ed-contact-item">
+                                <div class="ed-contact-icon ed-contact-email">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                                        <polyline points="22,6 12,13 2,6" />
+                                    </svg>
+                                </div>
+                                <div class="ed-contact-info">
+                                    <span class="ed-contact-label">Email</span>
+                                    <span class="ed-contact-value">@employee.Email</span>
+                                </div>
+                            </a>
+                        }
+                        @if (!string.IsNullOrEmpty(employee.ContactNo))
+                        {
+                            <a href="tel:@employee.ContactNo" class="ed-contact-item">
+                                <div class="ed-contact-icon ed-contact-phone">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72" />
+                                    </svg>
+                                </div>
+                                <div class="ed-contact-info">
+                                    <span class="ed-contact-label">Phone</span>
+                                    <span class="ed-contact-value">@employee.ContactNo</span>
+                                </div>
+                            </a>
+                        }
+                        @if (!string.IsNullOrEmpty(employee.ExtensionNo))
+                        {
+                            <div class="ed-contact-item">
+                                <div class="ed-contact-icon ed-contact-ext">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                                        <line x1="12" y1="18" x2="12.01" y2="18" />
+                                    </svg>
+                                </div>
+                                <div class="ed-contact-info">
+                                    <span class="ed-contact-label">Extension</span>
+                                    <span class="ed-contact-value">Ext. @employee.ExtensionNo</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Timeline Card -->
+                <div class="ed-sidebar-card ed-fade-in" style="animation-delay: 0.25s">
+                    <div class="ed-sidebar-card-header">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        <span>Timeline</span>
+                    </div>
+                    <div class="ed-sidebar-card-body">
+                        <div class="ed-timeline">
+                            @if (employee.DOJ.HasValue)
+                            {
+                                <div class="ed-timeline-item">
+                                    <div class="ed-timeline-dot ed-timeline-green"></div>
+                                    <div class="ed-timeline-content">
+                                        <span class="ed-timeline-date">@employee.DOJ.Value.ToString("MMM dd, yyyy")</span>
+                                        <span class="ed-timeline-text">Joined the organization</span>
+                                    </div>
+                                </div>
+                            }
+                            @if (employee.DOB.HasValue)
+                            {
+                                <div class="ed-timeline-item">
+                                    <div class="ed-timeline-dot ed-timeline-blue"></div>
+                                    <div class="ed-timeline-content">
+                                        <span class="ed-timeline-date">@employee.DOB.Value.ToString("MMM dd, yyyy")</span>
+                                        <span class="ed-timeline-text">Date of birth</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Danger Zone -->
+                <div class="ed-sidebar-card ed-danger-card ed-fade-in" style="animation-delay: 0.3s">
+                    <div class="ed-sidebar-card-header ed-danger-header">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                            <line x1="12" y1="9" x2="12" y2="13" />
+                            <line x1="12" y1="17" x2="12.01" y2="17" />
+                        </svg>
+                        <span>Danger Zone</span>
+                    </div>
+                    <div class="ed-sidebar-card-body">
+                        <p class="ed-danger-text">Once deleted, this action cannot be undone. All employee data will be permanently removed.</p>
+                        <button class="ed-btn ed-btn-danger ed-btn-full" @onclick="ConfirmDelete" disabled="@isDeleting">
+                            @if (isDeleting)
+                            {
+                                <div class="ed-btn-spinner"></div>
+                                <span>Deleting...</span>
+                            }
+                            else
+                            {
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                    <line x1="10" y1="11" x2="10" y2="17" />
+                                    <line x1="14" y1="11" x2="14" y2="17" />
+                                </svg>
+                                <span>Delete Employee</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteModal)
+{
+    <div class="ed-modal-overlay ed-fade-in" @onclick="() => showDeleteModal = false">
+        <div class="ed-modal ed-slide-up" @onclick:stopPropagation="true">
+            <div class="ed-modal-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+            </div>
+            <h3 class="ed-modal-title">Delete Employee</h3>
+            <p class="ed-modal-text">
+                Are you sure you want to permanently delete <strong>@employee?.EmployeeName</strong> (@EmployeeCode)?
+                This action cannot be undone.
+            </p>
+            <div class="ed-modal-actions">
+                <button class="ed-btn ed-btn-ghost" @onclick="() => showDeleteModal = false">Cancel</button>
+                <button class="ed-btn ed-btn-danger" @onclick="DeleteEmployee" disabled="@isDeleting">
+                    @if (isDeleting)
+                    {
+                        <div class="ed-btn-spinner"></div>
+                        <span>Deleting...</span>
+                    }
+                    else
+                    {
+                        <span>Yes, Delete</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    /* ========================================
+           CSS CUSTOM PROPERTIES
+           ======================================== */
+    :root {
+        --ed-primary: #4f46e5;
+        --ed-primary-light: #eef2ff;
+        --ed-primary-hover: #4338ca;
+        --ed-success: #10b981;
+        --ed-success-light: #ecfdf5;
+        --ed-danger: #ef4444;
+        --ed-danger-light: #fef2f2;
+        --ed-warning: #f59e0b;
+        --ed-warning-light: #fffbeb;
+        --ed-blue: #3b82f6;
+        --ed-blue-light: #eff6ff;
+        --ed-purple: #8b5cf6;
+        --ed-purple-light: #f5f3ff;
+        --ed-orange: #f97316;
+        --ed-orange-light: #fff7ed;
+        --ed-teal: #14b8a6;
+        --ed-teal-light: #f0fdfa;
+        --ed-pink: #ec4899;
+        --ed-pink-light: #fdf2f8;
+        --ed-gray-50: #f9fafb;
+        --ed-gray-100: #f3f4f6;
+        --ed-gray-200: #e5e7eb;
+        --ed-gray-300: #d1d5db;
+        --ed-gray-400: #9ca3af;
+        --ed-gray-500: #6b7280;
+        --ed-gray-600: #4b5563;
+        --ed-gray-700: #374151;
+        --ed-gray-800: #1f2937;
+        --ed-gray-900: #111827;
+        --ed-radius: 12px;
+        --ed-radius-sm: 8px;
+        --ed-radius-lg: 16px;
+        --ed-shadow-sm: 0 1px 2px 0 rgba(0,0,0,.05);
+        --ed-shadow: 0 1px 3px 0 rgba(0,0,0,.1), 0 1px 2px -1px rgba(0,0,0,.1);
+        --ed-shadow-md: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -2px rgba(0,0,0,.1);
+        --ed-shadow-lg: 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -4px rgba(0,0,0,.1);
+        --ed-shadow-xl: 0 20px 25px -5px rgba(0,0,0,.1), 0 8px 10px -6px rgba(0,0,0,.1);
+        --ed-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ========================================
+           CONTAINER & BACKGROUND
+           ======================================== */
+    .ed-container {
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 0 24px 80px;
+        position: relative;
+    }
+
+    .ed-bg-gradient {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 350px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        z-index: -1;
+        opacity: 0.04;
+    }
+
+    /* ========================================
+           TOP BAR
+           ======================================== */
+    .ed-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 0;
+        margin-bottom: 8px;
+    }
+
+    .ed-topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .ed-back-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border: 1px solid var(--ed-gray-200);
+        border-radius: var(--ed-radius-sm);
+        background: white;
+        color: var(--ed-gray-600);
+        cursor: pointer;
+        transition: var(--ed-transition);
+    }
+
+        .ed-back-btn:hover {
+            border-color: var(--ed-primary);
+            color: var(--ed-primary);
+            box-shadow: var(--ed-shadow-sm);
+        }
+
+    .ed-breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+    }
+
+    .ed-breadcrumb-link {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--ed-gray-500);
+        text-decoration: none;
+        transition: var(--ed-transition);
+    }
+
+        .ed-breadcrumb-link:hover {
+            color: var(--ed-primary);
+        }
+
+    .ed-breadcrumb-sep {
+        color: var(--ed-gray-300);
+    }
+
+    .ed-breadcrumb-current {
+        color: var(--ed-gray-900);
+        font-weight: 600;
+    }
+
+    .ed-action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 20px;
+        border: none;
+        border-radius: var(--ed-radius-sm);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: var(--ed-transition);
+    }
+
+    .ed-action-edit {
+        background: var(--ed-primary);
+        color: white;
+        box-shadow: 0 1px 2px rgba(79, 70, 229, 0.3);
+    }
+
+        .ed-action-edit:hover {
+            background: var(--ed-primary-hover);
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+            transform: translateY(-1px);
+        }
+
+    .ed-action-primary {
+        background: var(--ed-primary);
+        color: white;
+    }
+
+        .ed-action-primary:hover {
+            background: var(--ed-primary-hover);
+        }
+
+    /* ========================================
+           LOADING STATE
+           ======================================== */
+    .ed-loading-container {
+        display: flex;
+        justify-content: center;
+        padding: 100px 0;
+    }
+
+    .ed-loading-card {
+        text-align: center;
+    }
+
+    .ed-pulse-loader {
+        position: relative;
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .ed-pulse-ring {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        border: 2px solid var(--ed-primary);
+        opacity: 0;
+        animation: ed-pulse-ring 2s ease-out infinite;
+    }
+
+        .ed-pulse-ring:nth-child(2) {
+            animation-delay: 0.4s;
+        }
+
+        .ed-pulse-ring:nth-child(3) {
+            animation-delay: 0.8s;
+        }
+
+    .ed-pulse-icon {
+        color: var(--ed-primary);
+        animation: ed-pulse-scale 2s ease-in-out infinite;
+    }
+
+    .ed-loading-text {
+        color: var(--ed-gray-500);
+        font-size: 15px;
+    }
+
+    @@keyframes ed-pulse-ring {
+        0% {
+            transform: scale(0.5);
+            opacity: 0.8;
+        }
+
+        100% {
+            transform: scale(1.3);
+            opacity: 0;
+        }
+    }
+
+    @@keyframes ed-pulse-scale {
+        0%, 100% {
+            transform: scale(1);
+        }
+
+        50% {
+            transform: scale(1.1);
+        }
+    }
+
+    /* ========================================
+           ALERTS
+           ======================================== */
+    .ed-alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px 20px;
+        border-radius: var(--ed-radius);
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .ed-alert-error {
+        background: var(--ed-danger-light);
+        border: 1px solid #fecaca;
+    }
+
+        .ed-alert-error .ed-alert-icon {
+            color: var(--ed-danger);
+        }
+
+    .ed-alert-success {
+        background: var(--ed-success-light);
+        border: 1px solid #a7f3d0;
+    }
+
+        .ed-alert-success .ed-alert-icon {
+            color: var(--ed-success);
+        }
+
+    .ed-alert-icon {
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .ed-alert-content {
+        flex: 1;
+    }
+
+        .ed-alert-content strong {
+            display: block;
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+
+        .ed-alert-content p {
+            font-size: 13px;
+            color: var(--ed-gray-600);
+            margin: 0;
+        }
+
+    .ed-alert-close {
+        background: none;
+        border: none;
+        color: var(--ed-gray-400);
+        cursor: pointer;
+        padding: 0;
+        flex-shrink: 0;
+    }
+
+        .ed-alert-close:hover {
+            color: var(--ed-gray-600);
+        }
+
+    .ed-alert-progress {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        height: 3px;
+        background: var(--ed-success);
+        animation: ed-progress 5s linear forwards;
+    }
+
+    @@keyframes ed-progress {
+        from {
+            width: 100%;
+        }
+
+        to {
+            width: 0%;
+        }
+    }
+
+    /* ========================================
+           EMPTY STATE
+           ======================================== */
+    .ed-empty-state {
+        text-align: center;
+        padding: 80px 0;
+    }
+
+    .ed-empty-illustration {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: var(--ed-gray-100);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 24px;
+        color: var(--ed-gray-400);
+    }
+
+    .ed-empty-state h3 {
+        font-size: 20px;
+        color: var(--ed-gray-800);
+        margin-bottom: 8px;
+    }
+
+    .ed-empty-state p {
+        color: var(--ed-gray-500);
+        margin-bottom: 24px;
+    }
+
+    /* ========================================
+           HERO SECTION
+           ======================================== */
+    .ed-hero {
+        background: white;
+        border-radius: var(--ed-radius-lg);
+        box-shadow: var(--ed-shadow-md);
+        overflow: hidden;
+        margin-bottom: 24px;
+        position: relative;
+    }
+
+    .ed-hero-bg {
+        height: 120px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        position: relative;
+    }
+
+    .ed-hero-pattern {
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(circle at 20% 50%, rgba(255,255,255,0.15) 1px, transparent 1px), radial-gradient(circle at 80% 30%, rgba(255,255,255,0.1) 1px, transparent 1px);
+        background-size: 40px 40px;
+    }
+
+    .ed-hero-content {
+        padding: 0 32px 28px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-top: -48px;
+        position: relative;
+    }
+
+    .ed-avatar-section {
+        display: flex;
+        align-items: flex-end;
+        gap: 20px;
+    }
+
+    .ed-avatar {
+        width: 96px;
+        height: 96px;
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        font-weight: 700;
+        color: white;
+        border: 4px solid white;
+        box-shadow: var(--ed-shadow-lg);
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .ed-avatar-male {
+        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    }
+
+    .ed-avatar-female {
+        background: linear-gradient(135deg, #ec4899, #be185d);
+    }
+
+    .ed-avatar-status {
+        position: absolute;
+        bottom: -2px;
+        right: -2px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 3px solid white;
+    }
+
+    .ed-status-active {
+        background: var(--ed-success);
+    }
+
+    .ed-status-inactive {
+        background: var(--ed-gray-400);
+    }
+
+    .ed-hero-info {
+        padding-bottom: 4px;
+    }
+
+    .ed-hero-name {
+        font-size: 26px;
+        font-weight: 700;
+        color: var(--ed-gray-900);
+        margin: 0 0 2px;
+        line-height: 1.2;
+    }
+
+    .ed-hero-role {
+        font-size: 15px;
+        color: var(--ed-gray-500);
+        margin: 0 0 8px;
+    }
+
+    .ed-hero-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .ed-meta-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 13px;
+        color: var(--ed-gray-500);
+    }
+
+    .ed-meta-divider {
+        color: var(--ed-gray-300);
+        font-size: 10px;
+    }
+
+    .ed-hero-badges {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding-bottom: 4px;
+    }
+
+    .ed-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: 100px;
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    .ed-badge-code {
+        background: var(--ed-gray-100);
+        color: var(--ed-gray-700);
+    }
+
+    .ed-badge-active {
+        background: var(--ed-success-light);
+        color: #065f46;
+    }
+
+    .ed-badge-inactive {
+        background: var(--ed-gray-100);
+        color: var(--ed-gray-600);
+    }
+
+    .ed-badge-type {
+        background: var(--ed-blue-light);
+        color: #1e40af;
+    }
+
+    .ed-badge-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    /* ========================================
+           STATS ROW
+           ======================================== */
+    .ed-stats-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .ed-stat-card {
+        background: white;
+        border-radius: var(--ed-radius);
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        box-shadow: var(--ed-shadow-sm);
+        border: 1px solid var(--ed-gray-100);
+        transition: var(--ed-transition);
+    }
+
+        .ed-stat-card:hover {
+            box-shadow: var(--ed-shadow-md);
+            transform: translateY(-2px);
+        }
+
+    .ed-stat-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: var(--ed-radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .ed-stat-icon-blue {
+        background: var(--ed-blue-light);
+        color: var(--ed-blue);
+    }
+
+    .ed-stat-icon-green {
+        background: var(--ed-success-light);
+        color: var(--ed-success);
+    }
+
+    .ed-stat-icon-purple {
+        background: var(--ed-purple-light);
+        color: var(--ed-purple);
+    }
+
+    .ed-stat-icon-orange {
+        background: var(--ed-orange-light);
+        color: var(--ed-orange);
+    }
+
+    .ed-stat-label {
+        display: block;
+        font-size: 12px;
+        color: var(--ed-gray-500);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 500;
+    }
+
+    .ed-stat-value {
+        display: block;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--ed-gray-800);
+        margin-top: 2px;
+    }
+
+    /* ========================================
+           MAIN LAYOUT
+           ======================================== */
+    .ed-layout {
+        display: grid;
+        grid-template-columns: 1fr 360px;
+        gap: 24px;
+        align-items: start;
+    }
+
+    /* ========================================
+           EDIT BANNER
+           ======================================== */
+    .ed-edit-banner {
+        background: var(--ed-warning-light);
+        border: 1px solid #fde68a;
+        border-radius: var(--ed-radius);
+        padding: 14px 20px;
+        margin-bottom: 24px;
+    }
+
+    .ed-edit-banner-content {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        color: #92400e;
+    }
+
+    /* ========================================
+           SECTIONS
+           ======================================== */
+    .ed-section {
+        background: white;
+        border-radius: var(--ed-radius-lg);
+        box-shadow: var(--ed-shadow-sm);
+        border: 1px solid var(--ed-gray-100);
+        margin-bottom: 20px;
+        overflow: hidden;
+        transition: var(--ed-transition);
+    }
+
+        .ed-section:hover {
+            box-shadow: var(--ed-shadow);
+        }
+
+    .ed-section-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--ed-gray-100);
+    }
+
+    .ed-section-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: var(--ed-radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .ed-section-icon-blue {
+        background: var(--ed-blue-light);
+        color: var(--ed-blue);
+    }
+
+    .ed-section-icon-green {
+        background: var(--ed-success-light);
+        color: var(--ed-success);
+    }
+
+    .ed-section-icon-purple {
+        background: var(--ed-purple-light);
+        color: var(--ed-purple);
+    }
+
+    .ed-section-icon-orange {
+        background: var(--ed-orange-light);
+        color: var(--ed-orange);
+    }
+
+    .ed-section-icon-teal {
+        background: var(--ed-teal-light);
+        color: var(--ed-teal);
+    }
+
+    .ed-section-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--ed-gray-900);
+        margin: 0;
+    }
+
+    .ed-section-subtitle {
+        font-size: 13px;
+        color: var(--ed-gray-400);
+        margin: 2px 0 0;
+    }
+
+    .ed-section-body {
+        padding: 24px;
+    }
+
+    /* ========================================
+           FORM GRID & FIELDS
+           ======================================== */
+    .ed-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+    }
+
+    .ed-field-full {
+        grid-column: 1 / -1;
+    }
+
+    .ed-label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--ed-gray-500);
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .ed-input, .ed-select, .ed-textarea {
+        width: 100%;
+        padding: 10px 14px;
+        border: 1.5px solid var(--ed-gray-200);
+        border-radius: var(--ed-radius-sm);
+        font-size: 14px;
+        color: var(--ed-gray-800);
+        background: white;
+        transition: var(--ed-transition);
+        font-family: inherit;
+    }
+
+        .ed-input:focus, .ed-select:focus, .ed-textarea:focus {
+            outline: none;
+            border-color: var(--ed-primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .ed-input::placeholder {
+            color: var(--ed-gray-400);
+        }
+
+    .ed-textarea {
+        resize: vertical;
+        min-height: 60px;
+    }
+
+    .ed-value {
+        font-size: 15px;
+        color: var(--ed-gray-800);
+        padding: 8px 0;
+        line-height: 1.5;
+    }
+
+    .ed-value-link a {
+        color: var(--ed-primary);
+        text-decoration: none;
+    }
+
+        .ed-value-link a:hover {
+            text-decoration: underline;
+        }
+
+    .ed-value-mono {
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        letter-spacing: 1px;
+    }
+
+    .ed-empty {
+        color: var(--ed-gray-400);
+        font-style: italic;
+        font-size: 14px;
+    }
+
+    .ed-readonly-field {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        background: var(--ed-gray-50);
+        border: 1.5px solid var(--ed-gray-200);
+        border-radius: var(--ed-radius-sm);
+        font-size: 14px;
+        color: var(--ed-gray-500);
+    }
+
+    .ed-validation-msg {
+        font-size: 12px;
+        color: var(--ed-danger);
+        margin-top: 4px;
+    }
+
+    .ed-inline-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 12px;
+        border-radius: 100px;
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    .ed-inline-blue {
+        background: var(--ed-blue-light);
+        color: #1e40af;
+    }
+
+    .ed-inline-pink {
+        background: var(--ed-pink-light);
+        color: #9d174d;
+    }
+
+    .ed-inline-red {
+        background: var(--ed-danger-light);
+        color: #991b1b;
+    }
+
+    .ed-inline-green {
+        background: var(--ed-success-light);
+        color: #065f46;
+    }
+
+    .ed-inline-gray {
+        background: var(--ed-gray-100);
+        color: var(--ed-gray-600);
+    }
+
+    /* ========================================
+           ACTION BAR (EDIT MODE)
+           ======================================== */
+    .ed-action-bar {
+        position: sticky;
+        bottom: 24px;
+        background: white;
+        border-radius: var(--ed-radius);
+        box-shadow: var(--ed-shadow-xl);
+        border: 1px solid var(--ed-gray-200);
+        padding: 16px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        z-index: 10;
+        margin-top: 8px;
+    }
+
+    .ed-action-bar-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--ed-gray-500);
+    }
+
+    .ed-action-bar-right {
+        display: flex;
+        gap: 12px;
+    }
+
+    /* ========================================
+           BUTTONS
+           ======================================== */
+    .ed-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 24px;
+        border-radius: var(--ed-radius-sm);
+        font-size: 14px;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+        transition: var(--ed-transition);
+        font-family: inherit;
+    }
+
+        .ed-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+    .ed-btn-primary {
+        background: var(--ed-primary);
+        color: white;
+        box-shadow: 0 1px 2px rgba(79, 70, 229, 0.3);
+    }
+
+        .ed-btn-primary:hover:not(:disabled) {
+            background: var(--ed-primary-hover);
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+            transform: translateY(-1px);
+        }
+
+    .ed-btn-ghost {
+        background: transparent;
+        color: var(--ed-gray-600);
+        border: 1px solid var(--ed-gray-300);
+    }
+
+        .ed-btn-ghost:hover:not(:disabled) {
+            background: var(--ed-gray-50);
+            border-color: var(--ed-gray-400);
+        }
+
+    .ed-btn-danger {
+        background: var(--ed-danger);
+        color: white;
+    }
+
+        .ed-btn-danger:hover:not(:disabled) {
+            background: #dc2626;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+        }
+
+    .ed-btn-full {
+        width: 100%;
+    }
+
+    .ed-btn-spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid transparent;
+        border-top-color: currentColor;
+        border-radius: 50%;
+        animation: ed-spin 0.6s linear infinite;
+    }
+
+    @@keyframes ed-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* ========================================
+           SIDEBAR
+           ======================================== */
+    .ed-sidebar-card {
+        background: white;
+        border-radius: var(--ed-radius);
+        box-shadow: var(--ed-shadow-sm);
+        border: 1px solid var(--ed-gray-100);
+        margin-bottom: 16px;
+        overflow: hidden;
+    }
+
+    .ed-sidebar-card-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--ed-gray-100);
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--ed-gray-700);
+    }
+
+    .ed-sidebar-card-body {
+        padding: 16px 20px;
+    }
+
+    /* Contact Items */
+    .ed-contact-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        text-decoration: none;
+        color: inherit;
+        border-bottom: 1px solid var(--ed-gray-50);
+        transition: var(--ed-transition);
+    }
+
+        .ed-contact-item:last-child {
+            border-bottom: none;
+        }
+
+    a.ed-contact-item:hover {
+        color: var(--ed-primary);
+    }
+
+    .ed-contact-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: var(--ed-radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .ed-contact-email {
+        background: var(--ed-blue-light);
+        color: var(--ed-blue);
+    }
+
+    .ed-contact-phone {
+        background: var(--ed-success-light);
+        color: var(--ed-success);
+    }
+
+    .ed-contact-ext {
+        background: var(--ed-purple-light);
+        color: var(--ed-purple);
+    }
+
+    .ed-contact-label {
+        display: block;
+        font-size: 11px;
+        color: var(--ed-gray-400);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .ed-contact-value {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--ed-gray-700);
+    }
+
+    /* Timeline */
+    .ed-timeline {
+        position: relative;
+        padding-left: 20px;
+    }
+
+        .ed-timeline::before {
+            content: '';
+            position: absolute;
+            left: 5px;
+            top: 6px;
+            bottom: 6px;
+            width: 2px;
+            background: var(--ed-gray-200);
+        }
+
+    .ed-timeline-item {
+        position: relative;
+        padding: 8px 0;
+    }
+
+    .ed-timeline-dot {
+        position: absolute;
+        left: -18px;
+        top: 14px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: var(--ed-shadow-sm);
+    }
+
+    .ed-timeline-green {
+        background: var(--ed-success);
+    }
+
+    .ed-timeline-blue {
+        background: var(--ed-blue);
+    }
+
+    .ed-timeline-date {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ed-gray-700);
+    }
+
+    .ed-timeline-text {
+        font-size: 12px;
+        color: var(--ed-gray-400);
+    }
+
+    /* Danger Card */
+    .ed-danger-card {
+        border-color: #fecaca;
+    }
+
+    .ed-danger-header {
+        color: var(--ed-danger) !important;
+    }
+
+    .ed-danger-text {
+        font-size: 13px;
+        color: var(--ed-gray-500);
+        margin: 0 0 16px;
+        line-height: 1.5;
+    }
+
+    /* ========================================
+           MODAL
+           ======================================== */
+    .ed-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 24px;
+    }
+
+    .ed-modal {
+        background: white;
+        border-radius: var(--ed-radius-lg);
+        padding: 40px;
+        max-width: 420px;
+        width: 100%;
+        text-align: center;
+        box-shadow: var(--ed-shadow-xl);
+    }
+
+    .ed-modal-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: var(--ed-danger-light);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+    }
+
+    .ed-modal-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--ed-gray-900);
+        margin: 0 0 8px;
+    }
+
+    .ed-modal-text {
+        font-size: 14px;
+        color: var(--ed-gray-500);
+        line-height: 1.6;
+        margin: 0 0 28px;
+    }
+
+    .ed-modal-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+    }
+
+        .ed-modal-actions .ed-btn {
+            min-width: 120px;
+        }
+
+    /* ========================================
+           ANIMATIONS
+           ======================================== */
+    .ed-fade-in {
+        animation: ed-fadeIn 0.5s ease-out forwards;
+        opacity: 0;
+    }
+
+    .ed-slide-down {
+        animation: ed-slideDown 0.3s ease-out forwards;
+    }
+
+    .ed-slide-up {
+        animation: ed-slideUp 0.3s ease-out forwards;
+    }
+
+    @@keyframes ed-fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(12px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@keyframes ed-slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-12px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@keyframes ed-slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(12px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* ========================================
+           RESPONSIVE
+           ======================================== */
+    @@media (max-width: 1200px) {
+        .ed-layout {
+            grid-template-columns: 1fr 300px;
+        }
+    }
+
+    @@media (max-width: 992px) {
+        .ed-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .ed-sidebar-col {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .ed-sidebar-card {
+            margin-bottom: 0;
+        }
+
+        .ed-stats-row {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .ed-container {
+            padding: 0 16px 80px;
+        }
+
+        .ed-hero-content {
+            padding: 0 20px 24px;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .ed-avatar-section {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .ed-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .ed-stats-row {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .ed-action-bar {
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .ed-action-bar-left {
+            text-align: center;
+        }
+
+        .ed-topbar {
+            flex-direction: column;
+            gap: 12px;
+            align-items: flex-start;
+        }
+    }
+
+    @@media (max-width: 480px) {
+        .ed-stats-row {
+            grid-template-columns: 1fr;
+        }
+
+        .ed-sidebar-col {
+            grid-template-columns: 1fr;
+        }
+
+        .ed-hero-badges {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .ed-modal {
+            padding: 28px 20px;
+        }
+    }
+</style>
+
+@code {
+    [Parameter]
+    public string EmployeeCode { get; set; } = string.Empty;
+
+    private Employee? employee;
+    private Employee? originalEmployee;
+    private bool isLoading = true;
+    private bool isEditMode = false;
+    private bool isSaving = false;
+    private bool isDeleting = false;
+    private bool showDeleteModal = false;
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEmployee();
+    }
+
+    private async Task LoadEmployee()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            employee = await EmployeeRepository.GetByCodeAsync(EmployeeCode);
+            if (employee != null)
+            {
+                originalEmployee = CloneEmployee(employee);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading employee {EmployeeCode}", EmployeeCode);
+            errorMessage = "Unable to load employee details. Please check your connection and try again.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private Employee CloneEmployee(Employee source)
+    {
+        return new Employee
+        {
+            EmployeeId = source.EmployeeId,
+            EmployeeCode = source.EmployeeCode,
+            EmployeeName = source.EmployeeName,
+            Gender = source.Gender,
+            Designation = source.Designation,
+            Email = source.Email,
+            ContactNo = source.ContactNo,
+            DOJ = source.DOJ,
+            DOB = source.DOB,
+            Status = source.Status,
+            CompanyId = source.CompanyId,
+            Company = source.Company,
+            DepartmentId = source.DepartmentId,
+            Department = source.Department,
+            SubDepartment = source.SubDepartment,
+            Division = source.Division,
+            EmployementType = source.EmployementType,
+            FatherName = source.FatherName,
+            MotherName = source.MotherName,
+            ResidentialAddress = source.ResidentialAddress,
+            PermanentAddress = source.PermanentAddress,
+            Nomenee1 = source.Nomenee1,
+            Nomenee2 = source.Nomenee2,
+            BloodGroup = source.BloodGroup,
+            Location = source.Location,
+            Grade = source.Grade,
+            Team = source.Team,
+            AadhaarNumber = source.AadhaarNumber,
+            MaritalStatus = source.MaritalStatus,
+            Nationality = source.Nationality,
+            PassportNumber = source.PassportNumber,
+            OverallExperience = source.OverallExperience,
+            Qualifications = source.Qualifications,
+            EmergencyContact = source.EmergencyContact,
+            Remarks = source.Remarks,
+            PlaceOfBirth = source.PlaceOfBirth,
+            ExtensionNo = source.ExtensionNo
+        };
+    }
+
+    private void EnableEditMode()
+    {
+        isEditMode = true;
+        successMessage = null;
+    }
+
+    private void CancelEdit()
+    {
+        if (originalEmployee != null && employee != null)
+        {
+            // Restore all fields from the clone
+            var props = typeof(Employee).GetProperties();
+            foreach (var prop in props)
+            {
+                if (prop.CanWrite)
+                {
+                    prop.SetValue(employee, prop.GetValue(originalEmployee));
+                }
+            }
+        }
+        isEditMode = false;
+    }
+
+    private async Task HandleSave()
+    {
+        if (employee == null) return;
+
+        isSaving = true;
+        errorMessage = null;
+
+        try
+        {
+            var result = await EmployeeRepository.UpdateAsync(employee);
+
+            if (result > 0)
+            {
+                originalEmployee = CloneEmployee(employee);
+                isEditMode = false;
+                successMessage = "Employee profile has been updated successfully!";
+
+                // Auto-dismiss after 5 seconds
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(5000);
+                    await InvokeAsync(() => { successMessage = null; StateHasChanged(); });
+                });
+            }
+            else
+            {
+                errorMessage = "Failed to update employee. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error updating employee {EmployeeCode}", EmployeeCode);
+            errorMessage = "An error occurred while saving. Please try again.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void ConfirmDelete()
+    {
+        showDeleteModal = true;
+    }
+
+    private async Task DeleteEmployee()
+    {
+        isDeleting = true;
+
+        try
+        {
+            var result = await EmployeeRepository.DeleteAsync(EmployeeCode);
+
+            if (result > 0)
+            {
+                Navigation.NavigateTo("/employees");
+            }
+            else
+            {
+                errorMessage = "Failed to delete employee.";
+                showDeleteModal = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error deleting employee {EmployeeCode}", EmployeeCode);
+            errorMessage = "An error occurred while deleting. Please try again.";
+            showDeleteModal = false;
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/employees");
+    }
+
+    private string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[^1][0]}".ToUpper();
+        return name.Substring(0, Math.Min(2, name.Length)).ToUpper();
+    }
+
+    private string GetTenure(DateTime? doj)
+    {
+        if (!doj.HasValue) return "N/A";
+        var span = DateTime.Now - doj.Value;
+        var years = (int)(span.TotalDays / 365.25);
+        var months = (int)((span.TotalDays % 365.25) / 30.44);
+        if (years > 0) return $"{years}y {months}m";
+        if (months > 0) return $"{months} months";
+        return $"{(int)span.TotalDays} days";
+    }
+
+    private string MaskAadhaar(string? aadhaar)
+    {
+        if (string.IsNullOrEmpty(aadhaar)) return EmptyText();
+        if (aadhaar.Length >= 8)
+            return "XXXX XXXX " + aadhaar[^4..];
+        return aadhaar;
+    }
+
+    private static string EmptyText() => "Not specified";
+
+    private static RenderFragment RequiredStar() => builder =>
+    {
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "style", "color: #ef4444; margin-left: 2px;");
+        builder.AddContent(2, "*");
+        builder.CloseElement();
+    };
+
+    private record FieldInfo(string Key, string Label, string? Value, bool Editable = true);
+
+    private List<FieldInfo> GetEmploymentFields()
+    {
+        return new List<FieldInfo>
+        {
+            new("Designation", "Designation", employee?.Designation),
+            new("Department", "Department", employee?.Department),
+            new("Company", "Company", employee?.Company),
+            new("EmployementType", "Employment Type", employee?.EmployementType),
+            new("DOJ", "Date of Joining", employee?.DOJ?.ToString("yyyy-MM-dd")),
+            new("Status", "Status", employee?.Status),
+            new("Grade", "Grade", employee?.Grade),
+            new("Team", "Team", employee?.Team),
+            new("Location", "Location", employee?.Location),
+            new("SubDepartment", "Sub Department", employee?.SubDepartment),
+            new("Division", "Division", employee?.Division),
+        };
+    }
+
+    private List<FieldInfo> GetFamilyFields()
+    {
+        return new List<FieldInfo>
+        {
+            new("FatherName", "Father's Name", employee?.FatherName),
+            new("MotherName", "Mother's Name", employee?.MotherName),
+            new("Nomenee1", "Nominee 1", employee?.Nomenee1),
+            new("Nomenee2", "Nominee 2", employee?.Nomenee2),
+        };
+    }
+
+    private void SetFieldValue(string key, string? value)
+    {
+        if (employee == null) return;
+        var prop = typeof(Employee).GetProperty(key);
+        if (prop != null && prop.CanWrite)
+        {
+            if (prop.PropertyType == typeof(DateTime?))
+            {
+                prop.SetValue(employee, DateTime.TryParse(value, out var dt) ? dt : null);
+            }
+            else
+            {
+                prop.SetValue(employee, value);
+            }
+        }
+    }
+}

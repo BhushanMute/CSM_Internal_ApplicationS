@@ -1,0 +1,902 @@
+﻿@using CSMTutorial.Data.Repositories
+@using MudBlazor
+@inject NavigationManager Navigation
+@inject IAuthService AuthService
+@inject IEmployeeRepository EmployeeRepository
+@inject ILogger<NavMenu> Logger
+@implements IDisposable
+
+<style>
+    /* ========================================
+           SIDEBAR CONTAINER
+           ======================================== */
+    .sidebar-container {
+        --sidebar-bg-start: #1e1b4b;
+        --sidebar-bg-mid: #312e81;
+        --sidebar-bg-end: #4338ca;
+        --sidebar-text: rgba(255, 255, 255, 0.7);
+        --sidebar-text-active: #ffffff;
+        --sidebar-border: rgba(255, 255, 255, 0.1);
+        --sidebar-hover: rgba(255, 255, 255, 0.1);
+        --sidebar-active-bg: linear-gradient(135deg, rgba(129, 140, 248, 0.3), rgba(192, 132, 252, 0.2));
+        --sidebar-accent: linear-gradient(135deg, #818cf8, #c084fc);
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background: linear-gradient(180deg, var(--sidebar-bg-start) 0%, var(--sidebar-bg-mid) 50%, var(--sidebar-bg-end) 100%);
+        color: white;
+        overflow: hidden;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+        .sidebar-container.dark {
+            --sidebar-bg-start: #0f172a;
+            --sidebar-bg-mid: #1e293b;
+            --sidebar-bg-end: #334155;
+            --sidebar-text: rgba(255, 255, 255, 0.6);
+            --sidebar-border: rgba(255, 255, 255, 0.08);
+            --sidebar-hover: rgba(255, 255, 255, 0.08);
+            --sidebar-active-bg: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(139, 92, 246, 0.2));
+            background: linear-gradient(180deg, var(--sidebar-bg-start) 0%, var(--sidebar-bg-mid) 50%, var(--sidebar-bg-end) 100%);
+        }
+
+    /* ========================================
+           HEADER / LOGO
+           ======================================== */
+    .sidebar-header {
+        padding: 20px;
+        border-bottom: 1px solid var(--sidebar-border);
+        flex-shrink: 0;
+        transition: padding 0.3s ease;
+    }
+
+    .sidebar-container.collapsed .sidebar-header {
+        padding: 20px 12px;
+        display: flex;
+        justify-content: center;
+    }
+
+    .logo-link {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-decoration: none;
+        color: white;
+        cursor: pointer;
+    }
+
+    .logo-icon {
+        width: 42px;
+        height: 42px;
+        background: var(--sidebar-accent);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+        box-shadow: 0 4px 12px rgba(129, 140, 248, 0.3);
+        transition: transform 0.3s ease;
+    }
+
+    .sidebar-container.collapsed .logo-icon {
+        transform: scale(0.95);
+    }
+
+    .logo-text {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.2;
+    }
+
+    .logo-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+    }
+
+    .logo-subtitle {
+        font-size: 0.7rem;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    /* ========================================
+           NAVIGATION
+           ======================================== */
+    .sidebar-nav {
+        flex: 1;
+        padding: 16px 12px;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    .sidebar-container.collapsed .sidebar-nav {
+        padding: 16px 8px;
+    }
+
+    .nav-section-title {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: rgba(255, 255, 255, 0.4);
+        padding: 16px 12px 8px;
+        font-weight: 600;
+    }
+
+    .nav-divider {
+        height: 1px;
+        background: var(--sidebar-border);
+        margin: 12px 8px;
+    }
+
+    .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        color: var(--sidebar-text);
+        text-decoration: none;
+        margin-bottom: 4px;
+        transition: all 0.2s ease;
+        position: relative;
+        overflow: hidden;
+        cursor: pointer;
+    }
+
+    .sidebar-container.collapsed .nav-item {
+        justify-content: center;
+        padding: 14px;
+        gap: 0;
+    }
+
+    .nav-item:hover {
+        background: var(--sidebar-hover);
+        color: var(--sidebar-text-active);
+    }
+
+    .sidebar-container:not(.collapsed) .nav-item:hover {
+        transform: translateX(4px);
+    }
+
+    .sidebar-container.collapsed .nav-item:hover {
+        transform: scale(1.1);
+    }
+
+    .nav-item.active {
+        background: var(--sidebar-active-bg);
+        color: var(--sidebar-text-active);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+        .nav-item.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 60%;
+            background: var(--sidebar-accent);
+            border-radius: 0 4px 4px 0;
+        }
+
+    .nav-icon {
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+
+    .nav-text {
+        flex: 1;
+        font-size: 0.9rem;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+    .nav-badge {
+        background: var(--sidebar-accent);
+        color: white;
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-weight: 600;
+    }
+
+    .nav-badge-new {
+        background: linear-gradient(135deg, #25d366, #128c7e);
+        color: white;
+        font-size: 0.6rem;
+        padding: 2px 6px;
+        border-radius: 8px;
+        font-weight: 600;
+        animation: pulse-badge 2s infinite;
+    }
+
+    @@keyframes pulse-badge {
+        0%, 100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.7;
+        }
+    }
+
+    .nav-arrow {
+        font-size: 0.75rem;
+        opacity: 0;
+        transition: opacity 0.2s, transform 0.2s;
+    }
+
+    .nav-item:hover .nav-arrow {
+        opacity: 1;
+        transform: translateX(2px);
+    }
+
+    /* ========================================
+           WHATSAPP GROUP MENU
+           ======================================== */
+    .whatsapp-group {
+        margin-bottom: 8px;
+    }
+
+    .nav-group-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        color: var(--sidebar-text);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+
+        .nav-group-header:hover {
+            background: var(--sidebar-hover);
+            color: var(--sidebar-text-active);
+        }
+
+    .nav-toggle-icon {
+        margin-left: auto;
+        transition: transform 0.3s ease;
+        font-size: 0.8rem;
+    }
+
+        .nav-toggle-icon.expanded {
+            transform: rotate(180deg);
+        }
+
+    .nav-submenu {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+        padding-left: 8px;
+    }
+
+        .nav-submenu.show {
+            max-height: 500px;
+        }
+
+    .nav-item.sub-item {
+        padding-left: 40px;
+        font-size: 0.85rem;
+    }
+
+    .sidebar-container.collapsed .nav-submenu {
+        padding-left: 0;
+    }
+
+    .sidebar-container.collapsed .nav-item.sub-item {
+        padding-left: 14px;
+    }
+
+    /* Submenu Divider */
+    .submenu-divider {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.1);
+        margin: 8px 40px 8px 40px;
+    }
+
+    .sidebar-container.collapsed .submenu-divider {
+        margin: 8px 14px;
+    }
+
+    .submenu-label {
+        font-size: 0.6rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: rgba(255, 255, 255, 0.35);
+        padding: 8px 40px 4px;
+        font-weight: 600;
+    }
+
+    .sidebar-container.collapsed .submenu-label {
+        display: none;
+    }
+
+    /* ========================================
+           TOOLTIP FOR COLLAPSED STATE
+           ======================================== */
+    .sidebar-container.collapsed .nav-item::after {
+        content: attr(title);
+        position: absolute;
+        left: calc(100% + 12px);
+        top: 50%;
+        transform: translateY(-50%);
+        background: #1e293b;
+        color: white;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        white-space: nowrap;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.2s ease;
+        z-index: 1000;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        pointer-events: none;
+    }
+
+    .sidebar-container.collapsed .nav-item:hover::after {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    /* ========================================
+           FOOTER / USER SECTION
+           ======================================== */
+    .sidebar-footer {
+        padding: 16px 12px;
+        border-top: 1px solid var(--sidebar-border);
+        flex-shrink: 0;
+    }
+
+    .sidebar-container.collapsed .sidebar-footer {
+        padding: 16px 8px;
+    }
+
+    .user-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        background: var(--sidebar-hover);
+        border-radius: 12px;
+        margin-bottom: 12px;
+    }
+
+    .user-avatar-sm {
+        width: 36px;
+        height: 36px;
+        background: var(--sidebar-accent);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.8rem;
+        flex-shrink: 0;
+    }
+
+    .user-avatar-collapsed {
+        width: 40px;
+        height: 40px;
+        background: var(--sidebar-accent);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.85rem;
+        margin: 0 auto 12px;
+    }
+
+    .user-details {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.3;
+        overflow: hidden;
+    }
+
+    .user-name-sm {
+        font-size: 0.85rem;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--sidebar-text-active);
+    }
+
+    .user-role-sm {
+        font-size: 0.7rem;
+        color: rgba(255, 255, 255, 0.6);
+    }
+
+    .logout-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: 100%;
+        padding: 12px;
+        background: rgba(239, 68, 68, 0.2);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 12px;
+        color: #fca5a5;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+        .logout-btn:hover {
+            background: rgba(239, 68, 68, 0.3);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+        }
+
+    .sidebar-container.collapsed .logout-btn {
+        padding: 12px;
+        gap: 0;
+    }
+
+    /* ========================================
+           SCROLLBAR
+           ======================================== */
+    .sidebar-nav::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    .sidebar-nav::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .sidebar-nav::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+    }
+
+        .sidebar-nav::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+    /* ========================================
+           COLLAPSED STATE VISIBILITY
+           ======================================== */
+    .sidebar-container.collapsed .nav-text,
+    .sidebar-container.collapsed .nav-badge,
+    .sidebar-container.collapsed .nav-badge-new,
+    .sidebar-container.collapsed .nav-arrow,
+    .sidebar-container.collapsed .logo-text,
+    .sidebar-container.collapsed .user-card,
+    .sidebar-container.collapsed .nav-section-title,
+    .sidebar-container.collapsed .nav-group-header .nav-text,
+    .sidebar-container.collapsed .nav-toggle-icon {
+        display: none;
+    }
+
+    .sidebar-container.collapsed .nav-item {
+        justify-content: center;
+        padding: 14px;
+    }
+
+    .sidebar-container.collapsed .sidebar-header {
+        justify-content: center;
+        padding: 20px 12px;
+    }
+
+    .sidebar-container.collapsed .logout-btn span {
+        display: none;
+    }
+</style>
+
+<div class="sidebar-container @(IsCollapsed ? "collapsed" : "") @(IsDarkTheme ? "dark" : "")">
+    <!-- Logo Section -->
+    <div class="sidebar-header">
+        <a class="logo-link" href="/dashboard" @onclick:preventDefault="true" @onclick="@(() => NavigateTo("/dashboard"))">
+            <div class="logo-icon">
+                <i class="bi bi-hexagon-fill"></i>
+            </div>
+            @if (!IsCollapsed)
+            {
+                <div class="logo-text">
+                    <span class="logo-title">EMS</span>
+                    <span class="logo-subtitle">Management</span>
+                </div>
+            }
+        </a>
+    </div>
+
+    <!-- Navigation Menu -->
+    <nav class="sidebar-nav">
+        @if (!IsCollapsed)
+        {
+            <div class="nav-section-title">Main</div>
+        }
+
+        <a class="nav-item @GetActiveClass("/dashboard", true)" href="/dashboard" title="Dashboard" @onclick:preventDefault="true" @onclick="@(() => NavigateTo("/dashboard"))">
+            <span class="nav-icon"><i class="bi bi-grid-1x2-fill"></i></span>
+            @if (!IsCollapsed)
+            {
+                <span class="nav-text">Dashboard</span>
+            }
+        </a>
+
+        <a class="nav-item @GetActiveClass("/employees")" href="/employees" title="Employees" @onclick:preventDefault="true" @onclick="@(() => NavigateTo("/employees"))">
+            <span class="nav-icon"><i class="bi bi-people-fill"></i></span>
+            @if (!IsCollapsed)
+            {
+                <span class="nav-text">Employees</span>
+                @if (employeeCount > 0)
+                {
+                    <span class="nav-badge">@employeeCount</span>
+                }
+            }
+        </a>
+
+        @if (!IsCollapsed)
+        {
+            <div class="nav-section-title">Data</div>
+        }
+        else
+        {
+            <div class="nav-divider"></div>
+        }
+
+        @if (AuthService.IsAdmin)
+        {
+            <a class="nav-item @GetActiveClass("/upload", true)" href="/upload" title="Upload Excel" @onclick:preventDefault="true" @onclick="@(() => NavigateTo("/upload"))">
+                <span class="nav-icon"><i class="bi bi-cloud-arrow-up-fill"></i></span>
+                @if (!IsCollapsed)
+                {
+                    <span class="nav-text">Upload Excel</span>
+                    <span class="nav-arrow"><i class="bi bi-arrow-up-right"></i></span>
+                }
+            </a>
+        }
+
+        <a class="nav-item @GetActiveClass("/reports")" href="/reports" title="Reports" @onclick:preventDefault="true" @onclick="@(() => NavigateTo("/reports"))">
+            <span class="nav-icon"><i class="bi bi-file-earmark-bar-graph-fill"></i></span>
+            @if (!IsCollapsed)
+            {
+                <span class="nav-text">Reports</span>
+            }
+        </a>
+
+        <a class="nav-item @GetActiveClass("/attendance")" href="/attendance" title="Attendance" @onclick:preventDefault="true" @onclick="@(() => NavigateTo("/attendance"))">
+            <span class="nav-icon"><i class="bi bi-calendar-check-fill"></i></span>
+            @if (!IsCollapsed)
+            {
+                <span class="nav-text">Attendance</span>
+            }
+        </a>
+
+        @if (!IsCollapsed)
+        {
+            <div class="nav-section-title">WhatsApp</div>
+        }
+        else
+        {
+            <div class="nav-divider"></div>
+        }
+
+         
+            <div class="@(IsCollapsed ? "" : "whatsapp-group")">
+                @if (!IsCollapsed)
+                {
+                    <div class="nav-group-header" @onclick="ToggleWhatsAppMenu">
+                        <span class="nav-icon"><i class="bi bi-whatsapp"></i></span>
+                        <span class="nav-text">WhatsApp</span>
+                        <span class="nav-toggle-icon @(isWhatsAppExpanded ? "expanded" : "")">
+                            <i class="bi bi-chevron-down"></i>
+                        </span>
+                    </div>
+                }
+
+                <div class="nav-submenu @(isWhatsAppExpanded || IsCollapsed ? "show" : "")">
+                    <a class="nav-item @(IsCollapsed ? "" : "sub-item") @GetActiveClass("/whatsappdashboard", true)"
+                       href="/whatsappdashboard" title="WhatsApp Dashboard"
+                       @onclick:preventDefault="true" @onclick="@(() => NavigateTo("/whatsappdashboard"))">
+                        <span class="nav-icon"><i class="bi bi-grid-1x2"></i></span>
+                        @if (!IsCollapsed)
+                        {
+                            <span class="nav-text">Dashboard</span>
+                        }
+                    </a>
+
+                    <a class="nav-item @(IsCollapsed ? "" : "sub-item") @GetActiveClass("/bulksend", true)"
+                       href="/bulksend" title="Bulk Send"
+                       @onclick:preventDefault="true" @onclick="@(() => NavigateTo("/bulksend"))">
+                        <span class="nav-icon"><i class="bi bi-send-fill"></i></span>
+                        @if (!IsCollapsed)
+                        {
+                            <span class="nav-text">Bulk Send</span>
+                        }
+                    </a>
+
+                    <!-- Submenu Divider & Label for Teacher Absence -->
+                   @*  @if (!IsCollapsed)
+                    {
+                        <div class="submenu-divider"></div>
+                        <div class="submenu-label">Teacher Absence</div>
+                    } *@
+
+                    <!-- Teacher Absence Notification - NEW -->
+                    <a class="nav-item @(IsCollapsed ? "" : "sub-item") @GetActiveClass("/absence", true)"
+                       href="/absence" title="Absence Notification"
+                       @onclick:preventDefault="true" @onclick="@(() => NavigateTo("/absence"))">
+                        <span class="nav-icon"><i class="bi bi-megaphone-fill"></i></span>
+                        @if (!IsCollapsed)
+                        {
+                            <span class="nav-text">Send Notification</span>
+                            <span class="nav-badge-new">NEW</span>
+                        }
+                    </a>
+
+                    <!-- Message Status Tracking - NEW -->
+                    <a class="nav-item @(IsCollapsed ? "" : "sub-item") @GetActiveClass("/status", true)"
+                       href="/status" title="Message Status"
+                       @onclick:preventDefault="true" @onclick="@(() => NavigateTo("/status"))">
+                       
+                        <span class="nav-icon"><i class="bi bi-graph-up"></i></span>
+                        @if (!IsCollapsed)
+                        {
+                            <span class="nav-text">Message Status</span>
+                        }
+                    </a>
+
+                    <!-- Message History - NEW -->
+                    
+
+                   @*  @if (!IsCollapsed)
+                    {
+                        <div class="submenu-divider"></div>
+                        <div class="submenu-label">Settings</div>
+                    } *@
+
+                    <a class="nav-item @(IsCollapsed ? "" : "sub-item") @GetActiveClass("/messagestatus", true)"
+                       href="/messagestatus"
+                       title="Message Status"
+                       @onclick:preventDefault="true"
+                       @onclick="@(() => NavigateTo("/messagestatus"))">
+
+                        <span class="nav-icon"><i class="bi bi-graph-up"></i></span>
+
+                        @if (!IsCollapsed)
+                        {
+                            <span class="nav-text">Message Status</span>
+                        }
+                    </a>
+
+                    <a class="nav-item @(IsCollapsed ? "" : "sub-item") @GetActiveClass("/history", true)"
+                       href="/history" title="Message History"
+                       @onclick:preventDefault="true" @onclick="@(() => NavigateTo("/history"))">
+                        <span class="nav-icon"><i class="bi bi-clock-history"></i></span>
+                        @if (!IsCollapsed)
+                        {
+                            <span class="nav-text">All History</span>
+                        }
+                    </a>
+                </div>
+            </div>
+         
+
+        @if (!IsCollapsed)
+        {
+            <div class="nav-section-title">Settings</div>
+        }
+        else
+        {
+            <div class="nav-divider"></div>
+        }
+
+        <a class="nav-item @GetActiveClass("/profile", true)" href="/profile" title="Profile" @onclick:preventDefault="true" @onclick="@(() => NavigateTo("/profile"))">
+            <span class="nav-icon"><i class="bi bi-person-circle"></i></span>
+            @if (!IsCollapsed)
+            {
+                <span class="nav-text">Profile</span>
+            }
+        </a>
+
+        @if (AuthService.IsAdmin)
+        {
+            <a class="nav-item @GetActiveClass("/settings")" href="/settings" title="Settings" @onclick:preventDefault="true" @onclick="@(() => NavigateTo("/settings"))">
+                <span class="nav-icon"><i class="bi bi-gear-fill"></i></span>
+                @if (!IsCollapsed)
+                {
+                    <span class="nav-text">Settings</span>
+                }
+            </a>
+        }
+    </nav>
+
+    <!-- User Section at Bottom -->
+    <div class="sidebar-footer">
+        @if (!IsCollapsed)
+        {
+            <div class="user-card">
+                <div class="user-avatar-sm">
+                    <span>@GetUserInitials()</span>
+                </div>
+                <div class="user-details">
+                    <span class="user-name-sm">@(AuthService.CurrentUser?.FullName ?? "User")</span>
+                    <span class="user-role-sm">@(AuthService.IsAdmin ? "Admin" : "User")</span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="user-avatar-collapsed" title="@(AuthService.CurrentUser?.FullName ?? "User")">
+                <span>@GetUserInitials()</span>
+            </div>
+        }
+
+        <button class="logout-btn" @onclick="HandleLogout" title="Sign Out">
+            <i class="bi bi-box-arrow-left"></i>
+            @if (!IsCollapsed)
+            {
+                <span>Sign Out</span>
+            }
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public bool IsCollapsed { get; set; } = false;
+    [Parameter] public bool IsDarkTheme { get; set; } = false;
+    [Parameter] public bool IsMobile { get; set; } = false;
+    [Parameter] public EventCallback OnMenuItemClick { get; set; }
+
+    private int employeeCount = 0;
+    private bool isWhatsAppExpanded = true;
+    private System.Threading.Timer? _refreshTimer;
+
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        _refreshTimer = new System.Threading.Timer(async _ => await RefreshEmployeeCount(), null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEmployeeCount();
+        CheckWhatsAppExpanded();
+    }
+
+    private async Task LoadEmployeeCount()
+    {
+        try
+        {
+            employeeCount = await EmployeeRepository.GetTotalCountAsync();
+            Logger.LogInformation("Employee count loaded: {Count}", employeeCount);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading employee count");
+            employeeCount = 0;
+        }
+    }
+
+    private async Task RefreshEmployeeCount()
+    {
+        await LoadEmployeeCount();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void ToggleWhatsAppMenu() => isWhatsAppExpanded = !isWhatsAppExpanded;
+
+    private void CheckWhatsAppExpanded()
+    {
+        var currentPath = new Uri(Navigation.Uri).AbsolutePath.ToLower();
+
+        // List of all WhatsApp related paths
+        var whatsAppPaths = new[]
+        {
+            "/whatsappdashboard",
+            "/bulksend",
+            "/absence",
+            "/status",
+            "/messagestatus",
+            "/history"
+        };
+
+        // Check if current path matches any WhatsApp path
+        bool isOnWhatsAppPage = whatsAppPaths.Any(p =>
+            currentPath.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+
+        // If on a WhatsApp page, ensure menu is expanded
+        if (isOnWhatsAppPage)
+        {
+            isWhatsAppExpanded = true;
+        }
+    }
+
+    private async Task NavigateTo(string url)
+    {
+        try
+        {
+            if (OnMenuItemClick.HasDelegate)
+                await OnMenuItemClick.InvokeAsync();
+
+            if (IsMobile)
+                await Task.Delay(50);
+
+            Navigation.NavigateTo(url);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Navigation error to {Url}", url);
+        }
+    }
+
+    private string GetActiveClass(string href, bool exactMatch = false)
+    {
+        try
+        {
+            var currentPath = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');
+            href = href.TrimEnd('/');
+
+            if (string.IsNullOrEmpty(currentPath)) currentPath = "/";
+            if (string.IsNullOrEmpty(href)) href = "/";
+
+            if (href == "/" && currentPath == "/dashboard") return "";
+
+            if (exactMatch)
+                return currentPath.Equals(href, StringComparison.OrdinalIgnoreCase) ? "active" : "";
+
+            return currentPath.StartsWith(href, StringComparison.OrdinalIgnoreCase) ? "active" : "";
+        }
+        catch { return ""; }
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        CheckWhatsAppExpanded();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string GetUserInitials()
+    {
+        try
+        {
+            var name = AuthService.CurrentUser?.FullName ?? AuthService.CurrentUser?.LoginName ?? "U";
+            var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2) return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+            return name.Length >= 2 ? name[..2].ToUpper() : name.ToUpper();
+        }
+        catch { return "U"; }
+    }
+
+    private async Task HandleLogout()
+    {
+        try
+        {
+            if (OnMenuItemClick.HasDelegate)
+                await OnMenuItemClick.InvokeAsync();
+
+            Logger.LogInformation("User logging out: {User}", AuthService.CurrentUser?.LoginName ?? "Unknown");
+            await AuthService.LogoutAsync();
+            Navigation.NavigateTo("/login", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error during logout");
+            Navigation.NavigateTo("/login", forceLoad: true);
+        }
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+        _refreshTimer?.Dispose();
+    }
+}

@@ -1,0 +1,43 @@
+﻿<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+            <NotAuthorized>
+                @if (context.User?.Identity?.IsAuthenticated == true)
+                {
+                    <div class="alert alert-danger m-4">
+                        <h3>Access Denied</h3>
+                        <p>You are not authorized to access this page.</p>
+                        <a href="/" class="btn btn-primary">Go Home</a>
+                    </div>
+                }
+                else
+                {
+                    <RedirectToLogin />
+                }
+            </NotAuthorized>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <PageTitle>Not found</PageTitle>
+        <LayoutView Layout="typeof(Layout.MainLayout)">
+            <div class="d-flex flex-column align-items-center justify-content-center" style="min-height: 100vh;">
+                <h1 class="display-1 text-danger">404</h1>
+                <p class="lead">Sorry, there's nothing at this address.</p>
+                <a href="/" class="btn btn-primary">Go Home</a>
+            </div>
+        </LayoutView>
+    </NotFound>
+</Router>
+
+@code {
+    private class RedirectToLogin : ComponentBase
+    {
+        [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+        protected override void OnInitialized()
+        {
+            Navigation.NavigateTo("/login", forceLoad: true);
+        }
+    }
+}

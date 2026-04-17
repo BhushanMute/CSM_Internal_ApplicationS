@@ -1,0 +1,460 @@
+﻿/* ==========================================
+   GLOBAL BASE STYLES
+   ========================================== */
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+h1:focus {
+    outline: none;
+}
+
+/* ==========================================
+   THEME VARIABLES - LIGHT (DEFAULT)
+   ========================================== */
+html.light-theme,
+body.light-theme {
+    background-color: #f5f7fa;
+    color: #1e293b;
+}
+
+/* ==========================================
+   THEME VARIABLES - DARK
+   ========================================== */
+html.dark-theme,
+body.dark-theme {
+    background-color: #0f172a;
+    color: #f1f5f9;
+}
+
+/* ==========================================
+   LINKS & BUTTONS
+   ========================================== */
+a, .btn-link {
+    color: #0071c1;
+    transition: color 0.2s ease;
+}
+
+.dark-theme a {
+    color: #818cf8;
+}
+
+    .dark-theme a:hover {
+        color: #a5b4fc;
+    }
+
+.btn-primary {
+    color: #fff;
+    background-color: #1b6ec2;
+    border-color: #1861ac;
+}
+
+.btn {
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+    .btn:focus,
+    .btn:active:focus,
+    .btn-link.nav-link:focus,
+    .form-control:focus,
+    .form-check-input:focus {
+        box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+    }
+
+/* ==========================================
+   FORM CONTROLS
+   ========================================== */
+.form-control,
+.form-select {
+    border-radius: 8px;
+    padding: 10px 14px;
+    transition: all 0.2s ease;
+}
+
+    .form-control:focus,
+    .form-select:focus {
+        box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+    }
+
+.dark-theme input,
+.dark-theme select,
+.dark-theme textarea {
+    background-color: #1e293b;
+    border-color: #334155;
+    color: #f1f5f9;
+}
+
+    .dark-theme input::placeholder,
+    .dark-theme textarea::placeholder {
+        color: #64748b;
+    }
+
+    .dark-theme input:focus,
+    .dark-theme select:focus,
+    .dark-theme textarea:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+
+/* ==========================================
+   VALIDATION
+   ========================================== */
+.valid.modified:not([type=checkbox]) {
+    outline: 1px solid #26b050;
+}
+
+.invalid {
+    outline: 1px solid red;
+}
+
+.validation-message {
+    color: red;
+}
+
+/* ==========================================
+   CARDS
+   ========================================== */
+.card {
+    border-radius: 12px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    animation: fadeIn 0.3s ease;
+}
+
+    .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+.dark-theme .card {
+    background-color: #1e293b;
+    border-color: #334155;
+}
+
+.dark-theme .card-header {
+    background-color: #0f172a;
+    border-color: #334155;
+}
+
+/* ==========================================
+   TABLES
+   ========================================== */
+.table th {
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    color: #6c757d;
+    letter-spacing: 0.5px;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+.dark-theme .table {
+    color: #f1f5f9;
+}
+
+.dark-theme .table-striped > tbody > tr:nth-of-type(odd) {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.dark-theme .table-hover > tbody > tr:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.dark-theme .table thead th {
+    background-color: #0f172a;
+    border-color: #334155;
+    color: #94a3b8;
+}
+
+.dark-theme .table td,
+.dark-theme .table th {
+    border-color: #334155;
+}
+
+/* ==========================================
+   BADGES
+   ========================================== */
+.badge {
+    font-weight: 500;
+    padding: 6px 10px;
+}
+
+.bg-pink {
+    background-color: #e91e8c !important;
+}
+
+/* ==========================================
+   MODALS
+   ========================================== */
+.modal.show {
+    display: block;
+}
+
+.dark-theme .modal-content {
+    background-color: #1e293b;
+    border-color: #334155;
+}
+
+.dark-theme .modal-header {
+    border-bottom-color: #334155;
+}
+
+.dark-theme .modal-footer {
+    border-top-color: #334155;
+}
+
+.dark-theme .modal-title {
+    color: #f1f5f9;
+}
+
+/* ==========================================
+   ALERTS
+   ========================================== */
+.alert {
+    border-radius: 10px;
+    border: none;
+}
+
+.dark-theme .alert {
+    border-color: transparent;
+}
+
+.dark-theme .alert-info {
+    background-color: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+}
+
+.dark-theme .alert-success {
+    background-color: rgba(34, 197, 94, 0.2);
+    color: #86efac;
+}
+
+.dark-theme .alert-warning {
+    background-color: rgba(234, 179, 8, 0.2);
+    color: #fde047;
+}
+
+.dark-theme .alert-danger {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+/* ==========================================
+   BUTTONS (DARK THEME)
+   ========================================== */
+.dark-theme .btn-outline-secondary {
+    color: #94a3b8;
+    border-color: #475569;
+}
+
+    .dark-theme .btn-outline-secondary:hover {
+        background-color: #334155;
+        border-color: #475569;
+        color: #f1f5f9;
+    }
+
+/* ==========================================
+   PAGINATION
+   ========================================== */
+.pagination .page-link {
+    border-radius: 6px;
+    margin: 0 2px;
+}
+
+/* ==========================================
+   UPLOAD ZONE
+   ========================================== */
+.upload-zone {
+    border: 2px dashed #dee2e6;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    position: relative;
+    background: #fafafa;
+}
+
+    .upload-zone:hover,
+    .upload-zone.dragging {
+        border-color: #0d6efd;
+        background: #f0f7ff;
+    }
+
+.upload-input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.upload-content {
+    pointer-events: none;
+}
+
+    .upload-content label {
+        pointer-events: auto;
+    }
+
+/* ==========================================
+   TEXT UTILITIES
+   ========================================== */
+.dark-theme .text-muted {
+    color: #64748b !important;
+}
+
+/* ==========================================
+   SCROLLBAR
+   ========================================== */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }
+
+.dark-theme ::-webkit-scrollbar-thumb {
+    background: #475569;
+}
+
+    .dark-theme ::-webkit-scrollbar-thumb:hover {
+        background: #64748b;
+    }
+
+/* ==========================================
+   LAYOUT
+   ========================================== */
+.content {
+    flex: 1;
+    padding: 24px;
+}
+
+.page {
+    display: flex;
+    min-height: 100vh;
+}
+
+main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ==========================================
+   BLAZOR ERROR UI
+   ========================================== */
+#blazor-error-ui {
+    background: #fff3cd;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+    border-top: 2px solid #ffc107;
+}
+
+    #blazor-error-ui .dismiss {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.5rem;
+    }
+
+.dark-theme #blazor-error-ui {
+    background: #78350f;
+    color: #fef3c7;
+}
+
+.blazor-error-boundary {
+    background: url(data:image/svg+xml;base64,...) no-repeat 1rem/1.8rem, #b32121;
+    padding: 1rem 1rem 1rem 3.7rem;
+    color: white;
+}
+
+    .blazor-error-boundary::after {
+        content: "An error has occurred.";
+    }
+
+/* ==========================================
+   ANIMATIONS
+   ========================================== */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ==========================================
+   LOADING SPINNER
+   ========================================== */
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+
+/* ==========================================
+   SHADOW UTILITIES
+   ========================================== */
+.shadow-sm {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+}
+
+/* ==========================================
+   GLOBAL BASE STYLES
+   ========================================== */
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+h1:focus {
+    outline: none;
+}
+
+/* ==========================================
+   THEME VARIABLES - LIGHT (DEFAULT)
+   ========================================== */
+html.light-theme,
+body.light-theme {
+    background-color: #f5f7fa;
+    color: #1e293b;
+}
+
+/* ==========================================
+   THEME VARIABLES - DARK
+   ========================================== */
+html.dark-theme,
+body.dark-theme {
+    background-color: #0f172a;
+    color: #f1f5f9;
+}
+
+/* Add your existing CSS here */

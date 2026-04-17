@@ -1,0 +1,3300 @@
+﻿@page "/attendance/employee/{EmployeeId:int}"
+@using CSMTutorial.Models
+@using CSMTutorial.Data.Repositories
+@using CSMTutorial.Services
+
+@inject IAttendanceRepository AttendanceRepository
+@inject IEmployeeRepository EmployeeRepository
+@inject IExcelService ExcelService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ILogger<EmployeeAttendance> Logger
+
+@implements IDisposable
+
+<PageTitle>@(employee?.EmployeeName ?? "Employee") - Attendance | HR Portal</PageTitle>
+
+<div class="employee-attendance-page">
+    <!-- Breadcrumb Navigation -->
+    <nav class="breadcrumb-nav">
+        <button class="back-button" @onclick="GoBack">
+            <i class="bi bi-arrow-left"></i>
+        </button>
+        <ol class="breadcrumb-list">
+            <li><a href="/attendance">Attendance</a></li>
+            <li><i class="bi bi-chevron-right"></i></li>
+            <li class="active">Employee Details</li>
+        </ol>
+    </nav>
+
+    <!-- Hero Profile Section -->
+    @if (employee != null)
+    {
+        <div class="profile-hero">
+            <div class="profile-background">
+                <div class="bg-pattern"></div>
+            </div>
+            <div class="profile-content">
+                <div class="profile-main">
+                    <div class="profile-avatar @GetAvatarColorClass()">
+                        <span>@GetInitials(employee.EmployeeName)</span>
+                        <div class="avatar-status @(employee.Status == "Active" ? "online" : "offline")"></div>
+                    </div>
+                    <div class="profile-info">
+                        <h1>@employee.EmployeeName</h1>
+                        <div class="profile-meta">
+                            <span class="meta-item code">
+                                <i class="bi bi-fingerprint"></i>
+                                @employee.EmployeeCode
+                            </span>
+                            <span class="meta-divider">•</span>
+                            <span class="meta-item">
+                                <i class="bi bi-building"></i>
+                                @employee.CompanyName
+                            </span>
+                            <span class="meta-divider">•</span>
+                            <span class="meta-item">
+                                <i class="bi bi-diagram-3"></i>
+                                @employee.DepartmentName
+                            </span>
+                            @if (!string.IsNullOrEmpty(employee.Designation))
+                            {
+                                <span class="meta-divider">•</span>
+                                <span class="meta-item">
+                                    <i class="bi bi-briefcase"></i>
+                                    @employee.Designation
+                                </span>
+                            }
+                        </div>
+                        <div class="profile-status">
+                            <span class="status-badge @(employee.Status == "Active" ? "active" : "inactive")">
+                                <span class="status-dot"></span>
+                                @employee.Status
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="profile-actions">
+                    <!-- Month Selector -->
+                    <div class="month-selector">
+                        <label>
+                            <i class="bi bi-calendar3"></i>
+                            View Month
+                        </label>
+                        <div class="month-dropdown">
+                            <select @bind="selectedMonthKey" @bind:after="OnMonthChanged">
+                                @foreach (var month in availableMonths)
+                                {
+                                    <option value="@($"{month.AttMonth}_{month.AttYear}")">
+                                        @month.DisplayName
+                                    </option>
+                                }
+                                @if (!availableMonths.Any())
+                                {
+                                    <option value="@($"{DateTime.Now.Month}_{DateTime.Now.Year}")">
+                                        @DateTime.Now.ToString("MMMM yyyy")
+                                    </option>
+                                }
+                            </select>
+                            <i class="bi bi-chevron-down dropdown-icon"></i>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="action-buttons">
+                        <button class="btn-export" @onclick="ExportToExcel" 
+                                disabled="@(isExporting || !attendanceRecords.Any())">
+                            @if (isExporting)
+                            {
+                                <span class="btn-spinner"></span>
+                                <span>Exporting...</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-file-earmark-excel"></i>
+                                <span>Export Excel</span>
+                            }
+                        </button>
+                        <button class="btn-icon" @onclick="PrintReport" 
+                                disabled="@(!attendanceRecords.Any())" title="Print Report">
+                            <i class="bi bi-printer"></i>
+                        </button>
+                        <button class="btn-icon" @onclick="RefreshData" 
+                                disabled="@isLoading" title="Refresh Data">
+                            <i class="bi bi-arrow-clockwise @(isLoading ? "spinning" : "")"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (isLoading)
+    {
+        <!-- Skeleton Loading -->
+        <div class="profile-hero skeleton">
+            <div class="skeleton-avatar"></div>
+            <div class="skeleton-content">
+                <div class="skeleton-line lg"></div>
+                <div class="skeleton-line md"></div>
+                <div class="skeleton-line sm"></div>
+            </div>
+        </div>
+    }
+
+    <!-- Analytics Dashboard -->
+    @if (monthlySummary != null)
+    {
+        <div class="analytics-section">
+            <div class="section-header">
+                <h2>
+                    <i class="bi bi-graph-up-arrow"></i>
+                    Monthly Analytics
+                </h2>
+                <span class="period-badge">
+                    <i class="bi bi-calendar-range"></i>
+                    @GetSelectedMonthName()
+                </span>
+            </div>
+
+            <div class="analytics-grid">
+                <!-- Working Days Card -->
+                <div class="stat-card working">
+                    <div class="stat-icon">
+                        <i class="bi bi-calendar-range"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-value">@monthlySummary.TotalDays</span>
+                        <span class="stat-label">Working Days</span>
+                    </div>
+                    <div class="stat-decoration">
+                        <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+                            <path d="M0,35 Q25,25 50,30 T100,20" fill="none" stroke="currentColor" stroke-width="2" opacity="0.3"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Present Days Card -->
+                <div class="stat-card present">
+                    <div class="stat-icon">
+                        <i class="bi bi-check-circle-fill"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-value">@monthlySummary.PresentDays</span>
+                        <span class="stat-label">Days Present</span>
+                        <span class="stat-trend positive">
+                            <i class="bi bi-arrow-up-short"></i>
+                            @monthlySummary.PresentPercentage%
+                        </span>
+                    </div>
+                    <div class="progress-ring">
+                        <svg viewBox="0 0 36 36">
+                            <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                            <path class="ring-progress" 
+                                  stroke-dasharray="@monthlySummary.PresentPercentage, 100" 
+                                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                        </svg>
+                        <span class="ring-text">@monthlySummary.PresentPercentage%</span>
+                    </div>
+                </div>
+
+                <!-- Absent Days Card -->
+                <div class="stat-card absent">
+                    <div class="stat-icon">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-value">@monthlySummary.AbsentDays</span>
+                        <span class="stat-label">Days Absent</span>
+                        @if (monthlySummary.AbsentDays > 3)
+                        {
+                            <span class="stat-trend negative">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                Review Required
+                            </span>
+                        }
+                    </div>
+                </div>
+
+                <!-- Late Arrivals Card -->
+                <div class="stat-card late">
+                    <div class="stat-icon">
+                        <i class="bi bi-clock-history"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-value">@monthlySummary.LateDays</span>
+                        <span class="stat-label">Late Arrivals</span>
+                        <span class="stat-sub">@monthlySummary.FormattedTotalLate total</span>
+                    </div>
+                </div>
+
+                <!-- Leave Days Card -->
+                <div class="stat-card leave">
+                    <div class="stat-icon">
+                        <i class="bi bi-calendar-x"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-value">@monthlySummary.LeaveDays</span>
+                        <span class="stat-label">Leave Days</span>
+                    </div>
+                </div>
+
+                <!-- Overtime Card -->
+                <div class="stat-card overtime">
+                    <div class="stat-icon">
+                        <i class="bi bi-hourglass-split"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-value">@monthlySummary.FormattedTotalOT</span>
+                        <span class="stat-label">Total Overtime</span>
+                        @if (monthlySummary.TotalOvertimeMinutes > 60)
+                        {
+                            <span class="stat-trend positive">
+                                <i class="bi bi-star-fill"></i>
+                                Great Effort! (@monthlySummary.FormattedTotalOT)
+                            </span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Attendance Records Section -->
+    <div class="records-section">
+        <div class="records-header">
+            <div class="header-left">
+                <h2>
+                    <i class="bi bi-table"></i>
+                    Daily Attendance Log
+                </h2>
+                <span class="record-count">@attendanceRecords.Count records</span>
+            </div>
+            <div class="header-right">
+                <!-- View Toggle -->
+                <div class="view-toggle">
+                    <button class="@(viewMode == "table" ? "active" : "")" 
+                            @onclick="@(() => viewMode = "table")" title="Table View">
+                        <i class="bi bi-list-ul"></i>
+                    </button>
+                    <button class="@(viewMode == "calendar" ? "active" : "")" 
+                            @onclick="@(() => viewMode = "calendar")" title="Calendar View">
+                        <i class="bi bi-calendar-week"></i>
+                    </button>
+                </div>
+                
+                <!-- Legend -->
+                <div class="legend">
+                    <span class="legend-item present"><span class="dot"></span>Present</span>
+                    <span class="legend-item absent"><span class="dot"></span>Absent</span>
+                    <span class="legend-item late"><span class="dot"></span>Late</span>
+                    <span class="legend-item leave"><span class="dot"></span>Leave</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="records-body">
+            @if (isLoading)
+            {
+                <!-- Loading State -->
+                <div class="loading-state">
+                    <div class="loader">
+                        <div class="loader-ring">
+                            <div></div><div></div><div></div><div></div>
+                        </div>
+                    </div>
+                    <p>Loading attendance records...</p>
+                </div>
+            }
+            else if (!attendanceRecords.Any())
+            {
+                <!-- Empty State -->
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="bi bi-calendar-x"></i>
+                    </div>
+                    <h3>No Attendance Records</h3>
+                    <p>No attendance data found for @GetSelectedMonthName()</p>
+                    @if (availableMonths.Count > 1)
+                    {
+                        <button class="btn-secondary" @onclick="SelectPreviousMonth">
+                            <i class="bi bi-arrow-left me-2"></i>
+                            View Previous Month
+                        </button>
+                    }
+                </div>
+            }
+            else if (viewMode == "table")
+            {
+                <!-- Table View -->
+                <div class="table-wrapper">
+                    <table class="attendance-table">
+                        <thead>
+                            <tr>
+                                <th class="col-date">Date</th>
+                                <th class="col-day">Day</th>
+                                <th class="col-shift">Shift</th>
+                                <th class="col-time">
+                                    <i class="bi bi-box-arrow-in-right"></i> In
+                                </th>
+                                <th class="col-time">
+                                    <i class="bi bi-box-arrow-right"></i> Out
+                                </th>
+                                <th class="col-duration">Duration</th>
+                                <th class="col-variance">Late</th>
+                                <th class="col-variance">Early</th>
+                                <th class="col-variance">OT</th>
+                                <th class="col-status">Status</th>
+                                <th class="col-punches">Punches</th>
+                                <th class="col-action">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var record in attendanceRecords)
+                            {
+                                var isWeekend = record.AttendanceDate.DayOfWeek == DayOfWeek.Sunday || 
+                                               record.AttendanceDate.DayOfWeek == DayOfWeek.Saturday;
+                                var isSunday = record.AttendanceDate.DayOfWeek == DayOfWeek.Sunday;
+                                
+                                <tr class="@GetRowClass(record) @(isWeekend ? "weekend-row" : "")">
+                                    <td class="col-date">
+                                        <div class="date-cell">
+                                            <span class="date-num">@record.AttendanceDate.ToString("dd")</span>
+                                            <span class="date-month">@record.AttendanceDate.ToString("MMM")</span>
+                                        </div>
+                                    </td>
+                                    <td class="col-day">
+                                        <span class="day-badge @(isSunday ? "sunday" : "")">
+                                            @record.AttendanceDate.ToString("ddd")
+                                        </span>
+                                    </td>
+                                    <td class="col-shift">
+                                        @if (!string.IsNullOrEmpty(record.ShiftName))
+                                        {
+                                            <div class="shift-badge" title="@record.ShiftBeginTime - @record.ShiftEndTime">
+                                                <i class="bi bi-clock"></i>
+                                                @record.ShiftName
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="no-data">—</span>
+                                        }
+                                    </td>
+                                    <td class="col-time">
+                                        @if (!string.IsNullOrEmpty(record.InTime))
+                                        {
+                                            <div class="time-cell @(record.LateBy > 0 ? "late" : "ontime")">
+                                                <span class="time-value">@record.InTime</span>
+                                                @if (record.LateBy > 0)
+                                                {
+                                                    <i class="bi bi-arrow-down-short indicator"></i>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="no-data">—</span>
+                                        }
+                                    </td>
+                                    <td class="col-time">
+                                        @if (!string.IsNullOrEmpty(record.OutTime))
+                                        {
+                                            <div class="time-cell @(record.EarlyBy > 0 ? "early" : "")">
+                                                <span class="time-value">@record.OutTime</span>
+                                                @if (record.EarlyBy > 0)
+                                                {
+                                                    <i class="bi bi-arrow-up-short indicator warning"></i>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="no-data">—</span>
+                                        }
+                                    </td>
+                                    <td class="col-duration">
+                                        <span class="duration-badge">@record.FormattedDuration</span>
+                                    </td>
+                                    <td class="col-variance">
+                                        @if (record.LateBy > 0)
+                                        {
+                                            <span class="variance-badge late">
+                                                <i class="bi bi-clock"></i>
+                                                @record.FormattedLateBy
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="no-data">—</span>
+                                        }
+                                    </td>
+                                    <td class="col-variance">
+                                        @if (record.EarlyBy > 0)
+                                        {
+                                            <span class="variance-badge early">
+                                                <i class="bi bi-clock"></i>
+                                                @record.FormattedEarlyBy
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="no-data">—</span>
+                                        }
+                                    </td>
+                                    <td class="col-variance">
+                                        @if (record.OverTime > 0)
+                                        {
+                                            <span class="variance-badge overtime">
+                                                <i class="bi bi-plus-circle"></i>
+                                                @record.FormattedOverTime
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="no-data">—</span>
+                                        }
+                                    </td>
+                                    <td class="col-status">
+                                        <div class="status-cell">
+                                            <span class="status-badge @GetStatusClass(record.StatusCode)">
+                                                @GetStatusIcon(record.StatusCode)
+                                                @record.StatusDisplay
+                                            </span>
+                                            @if (record.MissedOutPunch == 1 || record.MissedInPunch == 1)
+                                            {
+                                                <span class="missed-alert" title="Missed Punch Detected">
+                                                    <i class="bi bi-exclamation-triangle-fill"></i>
+                                                </span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td class="col-punches">
+                                        @if (!string.IsNullOrEmpty(record.PunchRecords))
+                                        {
+                                            <div class="punches-cell" title="@record.PunchRecords">
+                                                <code>@TruncateText(record.PunchRecords, 18)</code>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="no-data">—</span>
+                                        }
+                                    </td>
+                                    <td class="col-action">
+                                        <button class="btn-view" @onclick="@(() => ShowPunchDetails(record))" 
+                                                title="View Details">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Table Footer -->
+                <div class="table-footer">
+                    <div class="footer-summary">
+                        <div class="summary-item">
+                            <span class="dot present"></span>
+                            Present: <strong>@monthlySummary?.PresentDays</strong>
+                        </div>
+                        <div class="summary-item">
+                            <span class="dot absent"></span>
+                            Absent: <strong>@monthlySummary?.AbsentDays</strong>
+                        </div>
+                        <div class="summary-item">
+                            <span class="dot late"></span>
+                            Late: <strong>@monthlySummary?.LateDays</strong>
+                        </div>
+                        <div class="summary-item">
+                            <span class="dot leave"></span>
+                            Leave: <strong>@monthlySummary?.LeaveDays</strong>
+                        </div>
+                        <div class="summary-item">
+                            <span class="dot overtime"></span>
+                            OT: <strong>@monthlySummary?.FormattedTotalOT</strong>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <!-- Calendar View -->
+                <div class="calendar-view">
+                    <div class="calendar-weekdays">
+                        <span class="weekend">Sun</span>
+                        <span>Mon</span>
+                        <span>Tue</span>
+                        <span>Wed</span>
+                        <span>Thu</span>
+                        <span>Fri</span>
+                        <span class="weekend">Sat</span>
+                    </div>
+                    <div class="calendar-days">
+                        @{
+                            var firstDay = new DateTime(selectedYear, selectedMonth, 1);
+                            var daysInMonth = DateTime.DaysInMonth(selectedYear, selectedMonth);
+                            var startOffset = (int)firstDay.DayOfWeek;
+                        }
+                        
+                        @for (int i = 0; i < startOffset; i++)
+                        {
+                            <div class="calendar-day empty"></div>
+                        }
+                        
+                        @for (int day = 1; day <= daysInMonth; day++)
+                        {
+                            var currentDate = new DateTime(selectedYear, selectedMonth, day);
+                            var record = attendanceRecords.FirstOrDefault(r => r.AttendanceDate.Date == currentDate.Date);
+                            var statusClass = GetCalendarDayClass(record, currentDate);
+                            var isToday = currentDate.Date == DateTime.Today;
+                            
+                            <div class="calendar-day @statusClass @(isToday ? "today" : "")"
+                                 @onclick="@(() => { if(record != null) ShowPunchDetails(record); })">
+                                <span class="day-number">@day</span>
+                                @if (record != null)
+                                {
+                                    <span class="day-status">@record.StatusCode</span>
+                                    @if (!string.IsNullOrEmpty(record.InTime))
+                                    {
+                                        <span class="day-time">@record.InTime</span>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Punch Details Modal -->
+@if (showPunchModal && selectedRecord != null)
+{
+    <div class="modal-backdrop" @onclick="ClosePunchModal">
+        <div class="modal-dialog" @onclick:stopPropagation="true">
+            <!-- Modal Header -->
+            <div class="modal-header">
+                <div class="modal-title">
+                    <div class="title-icon">
+                        <i class="bi bi-clock-history"></i>
+                    </div>
+                    <div class="title-text">
+                        <h3>Punch Details</h3>
+                        <p>@selectedRecord.AttendanceDate.ToString("dddd, MMMM dd, yyyy")</p>
+                    </div>
+                </div>
+                <button class="modal-close" @onclick="ClosePunchModal">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="modal-body">
+                <!-- Quick Info Cards -->
+                <div class="info-cards">
+                    <div class="info-card">
+                        <i class="bi bi-clock icon"></i>
+                        <div class="info-content">
+                            <span class="info-label">Shift</span>
+                            <span class="info-value">@(selectedRecord.ShiftName ?? "N/A")</span>
+                            <span class="info-sub">@selectedRecord.ShiftBeginTime - @selectedRecord.ShiftEndTime</span>
+                        </div>
+                    </div>
+                    <div class="info-card">
+                        <div class="status-icon @GetStatusClass(selectedRecord.StatusCode)">
+                            @GetStatusIcon(selectedRecord.StatusCode)
+                        </div>
+                        <div class="info-content">
+                            <span class="info-label">Status</span>
+                            <span class="info-value">@selectedRecord.StatusDisplay</span>
+                        </div>
+                    </div>
+                    <div class="info-card">
+                        <i class="bi bi-hourglass-split icon"></i>
+                        <div class="info-content">
+                            <span class="info-label">Duration</span>
+                            <span class="info-value highlight">@selectedRecord.FormattedDuration</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Time Display -->
+                <div class="time-display">
+                    <div class="time-block checkin">
+                        <div class="block-icon">
+                            <i class="bi bi-box-arrow-in-right"></i>
+                        </div>
+                        <div class="block-content">
+                            <span class="block-label">Check In</span>
+                            <span class="block-time">@(selectedRecord.InTime ?? "—")</span>
+                            @if (selectedRecord.LateBy > 0)
+                            {
+                                <span class="block-variance late">
+                                    <i class="bi bi-arrow-down"></i> @selectedRecord.FormattedLateBy late
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="time-connector">
+                        <div class="connector-line"></div>
+                        <span class="connector-text">@selectedRecord.FormattedDuration</span>
+                        <div class="connector-line"></div>
+                    </div>
+
+                    <div class="time-block checkout">
+                        <div class="block-icon">
+                            <i class="bi bi-box-arrow-right"></i>
+                        </div>
+                        <div class="block-content">
+                            <span class="block-label">Check Out</span>
+                            <span class="block-time">@(selectedRecord.OutTime ?? "—")</span>
+                            @if (selectedRecord.EarlyBy > 0)
+                            {
+                                <span class="block-variance early">
+                                    <i class="bi bi-arrow-up"></i> @selectedRecord.FormattedEarlyBy early
+                                </span>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stored Punches -->
+                @if (!string.IsNullOrEmpty(selectedRecord.PunchRecords))
+                {
+                    <div class="section-block">
+                        <h4><i class="bi bi-list-check"></i> Processed Punch Data</h4>
+                        <div class="code-block">@selectedRecord.PunchRecords</div>
+                    </div>
+                }
+
+                <!-- Raw Device Logs -->
+                <div class="section-block">
+                    <h4><i class="bi bi-cpu"></i> Raw Device Logs</h4>
+                    
+                    @if (isLoadingPunches)
+                    {
+                        <div class="inline-loading">
+                            <div class="mini-spinner"></div>
+                            <span>Loading device logs...</span>
+                        </div>
+                    }
+                    else if (punchDetails.Any())
+                    {
+                        <div class="punch-timeline">
+                            @{ int punchNum = 0; }
+                            @foreach (var punch in punchDetails)
+                            {
+                                punchNum++;
+                                var isIn = punch.Direction == "0" || punch.Direction?.ToUpper() == "IN";
+                                
+                                <div class="timeline-item @(isIn ? "in" : "out")">
+                                    <div class="timeline-marker">
+                                        <span class="marker-num">@punchNum</span>
+                                    </div>
+                                    <div class="timeline-content">
+                                        <div class="timeline-header">
+                                            <span class="punch-time">@punch.FormattedTime</span>
+                                            <span class="direction-tag @(isIn ? "in" : "out")">
+                                                <i class="bi bi-@(isIn ? "box-arrow-in-right" : "box-arrow-right")"></i>
+                                                @(isIn ? "IN" : "OUT")
+                                            </span>
+                                        </div>
+                                        <div class="timeline-details">
+                                            <span class="detail">
+                                                <i class="bi bi-router"></i>
+                                                @(punch.DeviceName ?? "Unknown Device")
+                                            </span>
+                                            @if (punch.BodyTemperature.HasValue && punch.BodyTemperature > 0)
+                                            {
+                                                <span class="detail temp @(punch.BodyTemperature > 37.5 ? "high" : "")">
+                                                    <i class="bi bi-thermometer-half"></i>
+                                                    @punch.BodyTemperature.Value.ToString("F1")°C
+                                                </span>
+                                            }
+                                            @if (!string.IsNullOrEmpty(punch.LocationAddress))
+                                            {
+                                                <span class="detail location" title="@punch.LocationAddress">
+                                                    <i class="bi bi-geo-alt"></i>
+                                                    @TruncateText(punch.LocationAddress, 25)
+                                                </span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="no-data-msg">
+                            <i class="bi bi-inbox"></i>
+                            <span>No raw device logs found for this date</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="modal-footer">
+                <button class="btn-close-modal" @onclick="ClosePunchModal">
+                    <i class="bi bi-x me-2"></i>Close
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ============================================
+     STYLES
+     ============================================ -->
+<style>
+    /* ==========================================
+       CSS VARIABLES
+       ========================================== */
+    :root {
+        --primary: #6366f1;
+        --primary-dark: #4f46e5;
+        --primary-light: #a5b4fc;
+        --primary-bg: #eef2ff;
+        --success: #10b981;
+        --success-dark: #059669;
+        --success-light: #d1fae5;
+        --danger: #ef4444;
+        --danger-dark: #dc2626;
+        --danger-light: #fee2e2;
+        --warning: #f59e0b;
+        --warning-dark: #d97706;
+        --warning-light: #fef3c7;
+        --info: #3b82f6;
+        --info-light: #dbeafe;
+        --purple: #8b5cf6;
+        --purple-light: #ede9fe;
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-200: #e5e7eb;
+        --gray-300: #d1d5db;
+        --gray-400: #9ca3af;
+        --gray-500: #6b7280;
+        --gray-600: #4b5563;
+        --gray-700: #374151;
+        --gray-800: #1f2937;
+        --gray-900: #111827;
+        --radius-sm: 6px;
+        --radius: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-2xl: 24px;
+        --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+        --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    }
+
+    /* ==========================================
+       PAGE LAYOUT
+       ========================================== */
+    .employee-attendance-page {
+        padding: 24px;
+        background: linear-gradient(180deg, var(--gray-50) 0%, #ffffff 100%);
+        min-height: 100vh;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    /* ==========================================
+       BREADCRUMB
+       ========================================== */
+    .breadcrumb-nav {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .back-button {
+        width: 42px;
+        height: 42px;
+        border: 1px solid var(--gray-200);
+        background: white;
+        border-radius: var(--radius);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: var(--gray-600);
+        transition: all 0.2s ease;
+    }
+
+    .back-button:hover {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+        transform: translateX(-3px);
+    }
+
+    .breadcrumb-list {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .breadcrumb-list li {
+        display: flex;
+        align-items: center;
+        font-size: 14px;
+        color: var(--gray-500);
+    }
+
+    .breadcrumb-list a {
+        color: var(--gray-600);
+        text-decoration: none;
+        transition: color 0.2s;
+    }
+
+    .breadcrumb-list a:hover {
+        color: var(--primary);
+    }
+
+    .breadcrumb-list .active {
+        color: var(--gray-800);
+        font-weight: 600;
+    }
+
+    .breadcrumb-list i {
+        font-size: 10px;
+        color: var(--gray-300);
+    }
+
+    /* ==========================================
+       PROFILE HERO
+       ========================================== */
+    .profile-hero {
+        position: relative;
+        background: white;
+        border-radius: var(--radius-xl);
+        overflow: hidden;
+        margin-bottom: 24px;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .profile-background {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 140px;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
+    }
+
+    .bg-pattern {
+        position: absolute;
+        inset: 0;
+        opacity: 0.1;
+        background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+
+    .profile-content {
+        position: relative;
+        padding: 100px 32px 32px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        flex-wrap: wrap;
+        gap: 24px;
+    }
+
+    .profile-main {
+        display: flex;
+        align-items: flex-end;
+        gap: 24px;
+    }
+
+    .profile-avatar {
+        width: 110px;
+        height: 110px;
+        border-radius: var(--radius-xl);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 36px;
+        font-weight: 700;
+        color: white;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
+        border: 5px solid white;
+        box-shadow: var(--shadow-lg);
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .profile-avatar.present-avatar {
+        background: linear-gradient(135deg, var(--success) 0%, var(--success-dark) 100%);
+    }
+
+    .avatar-status {
+        position: absolute;
+        bottom: 6px;
+        right: 6px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 3px solid white;
+    }
+
+    .avatar-status.online {
+        background: var(--success);
+    }
+
+    .avatar-status.offline {
+        background: var(--gray-400);
+    }
+
+    .profile-info {
+        padding-bottom: 8px;
+    }
+
+    .profile-info h1 {
+        font-size: 30px;
+        font-weight: 700;
+        color: var(--gray-900);
+        margin: 0 0 10px;
+        letter-spacing: -0.5px;
+    }
+
+    .profile-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        color: var(--gray-600);
+        margin-bottom: 12px;
+    }
+
+    .meta-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .meta-item i {
+        color: var(--gray-400);
+        font-size: 14px;
+    }
+
+    .meta-item.code {
+        font-family: 'Monaco', 'Consolas', monospace;
+        background: var(--gray-100);
+        padding: 4px 10px;
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+        color: var(--gray-700);
+    }
+
+    .meta-divider {
+        color: var(--gray-300);
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-radius: 50px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .status-badge.active {
+        background: var(--success-light);
+        color: var(--success-dark);
+    }
+
+    .status-badge.inactive {
+        background: var(--gray-200);
+        color: var(--gray-600);
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+        animation: pulse 2s ease-in-out infinite;
+    }
+
+    @@keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.2); opacity: 0.7; }
+    }
+
+    /* Profile Actions */
+    .profile-actions {
+        display: flex;
+        align-items: flex-end;
+        gap: 20px;
+        flex-wrap: wrap;
+    }
+
+    .month-selector {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .month-selector label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--gray-500);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .month-selector label i {
+        color: var(--primary);
+    }
+
+    .month-dropdown {
+        position: relative;
+    }
+
+    .month-dropdown select {
+        appearance: none;
+        padding: 12px 44px 12px 16px;
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--gray-800);
+        background: white;
+        min-width: 220px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .month-dropdown select:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+    }
+
+    .month-dropdown .dropdown-icon {
+        position: absolute;
+        right: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--gray-400);
+        pointer-events: none;
+        font-size: 14px;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+    }
+
+    .btn-export {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 22px;
+        background: linear-gradient(135deg, var(--success) 0%, var(--success-dark) 100%);
+        border: none;
+        border-radius: var(--radius);
+        color: white;
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: var(--shadow);
+    }
+
+    .btn-export:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .btn-export:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .btn-spinner {
+        width: 18px;
+        height: 18px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .btn-icon {
+        width: 46px;
+        height: 46px;
+        border: 1px solid var(--gray-200);
+        background: white;
+        border-radius: var(--radius);
+        color: var(--gray-600);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        transition: all 0.2s;
+    }
+
+    .btn-icon:hover:not(:disabled) {
+        background: var(--gray-50);
+        border-color: var(--gray-300);
+        color: var(--gray-800);
+    }
+
+    .btn-icon:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-icon .spinning {
+        animation: spin 1s linear infinite;
+    }
+
+    /* Skeleton Loading */
+    .profile-hero.skeleton {
+        display: flex;
+        align-items: center;
+        padding: 40px;
+        gap: 24px;
+        min-height: 200px;
+        background: white;
+    }
+
+    .skeleton-avatar {
+        width: 100px;
+        height: 100px;
+        border-radius: var(--radius-xl);
+        background: linear-gradient(90deg, var(--gray-200) 25%, var(--gray-100) 50%, var(--gray-200) 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+    }
+
+    .skeleton-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .skeleton-line {
+        height: 20px;
+        border-radius: var(--radius-sm);
+        background: linear-gradient(90deg, var(--gray-200) 25%, var(--gray-100) 50%, var(--gray-200) 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+    }
+
+    .skeleton-line.lg { width: 280px; height: 32px; }
+    .skeleton-line.md { width: 400px; }
+    .skeleton-line.sm { width: 150px; }
+
+    @@keyframes shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    /* ==========================================
+       ANALYTICS SECTION
+       ========================================== */
+    .analytics-section {
+        margin-bottom: 24px;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 18px;
+    }
+
+    .section-header h2 {
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--gray-800);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .section-header h2 i {
+        color: var(--primary);
+    }
+
+    .period-badge {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--primary-bg);
+        color: var(--primary);
+        padding: 8px 16px;
+        border-radius: 50px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .analytics-grid {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 18px;
+    }
+
+    @@media (max-width: 1400px) {
+        .analytics-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    @@media (max-width: 900px) {
+        .analytics-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @@media (max-width: 600px) {
+        .analytics-grid { grid-template-columns: 1fr; }
+    }
+
+    .stat-card {
+        position: relative;
+        background: white;
+        border-radius: var(--radius-lg);
+        padding: 22px;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+        transition: transform 0.25s, box-shadow 0.25s;
+        border-top: 4px solid transparent;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-6px);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .stat-card.working { border-top-color: var(--primary); }
+    .stat-card.present { border-top-color: var(--success); }
+    .stat-card.absent { border-top-color: var(--danger); }
+    .stat-card.late { border-top-color: var(--warning); }
+    .stat-card.leave { border-top-color: var(--info); }
+    .stat-card.overtime { border-top-color: var(--purple); }
+
+    .stat-icon {
+        width: 52px;
+        height: 52px;
+        border-radius: var(--radius);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 14px;
+    }
+
+    .stat-icon i {
+        font-size: 26px;
+    }
+
+    .stat-card.working .stat-icon { background: var(--primary-bg); color: var(--primary); }
+    .stat-card.present .stat-icon { background: var(--success-light); color: var(--success); }
+    .stat-card.absent .stat-icon { background: var(--danger-light); color: var(--danger); }
+    .stat-card.late .stat-icon { background: var(--warning-light); color: var(--warning); }
+    .stat-card.leave .stat-icon { background: var(--info-light); color: var(--info); }
+    .stat-card.overtime .stat-icon { background: var(--purple-light); color: var(--purple); }
+
+    .stat-content {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .stat-value {
+        font-size: 34px;
+        font-weight: 700;
+        color: var(--gray-900);
+        line-height: 1;
+    }
+
+    .stat-label {
+        font-size: 13px;
+        color: var(--gray-500);
+        margin-top: 6px;
+    }
+
+    .stat-trend {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        margin-top: 10px;
+        padding: 4px 10px;
+        border-radius: var(--radius-sm);
+        width: fit-content;
+    }
+
+    .stat-trend.positive {
+        background: var(--success-light);
+        color: var(--success-dark);
+    }
+
+    .stat-trend.negative {
+        background: var(--danger-light);
+        color: var(--danger);
+    }
+
+    .stat-sub {
+        font-size: 12px;
+        color: var(--gray-400);
+        margin-top: 6px;
+    }
+
+    .stat-decoration {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 40px;
+        opacity: 0.15;
+    }
+
+    .stat-decoration svg {
+        width: 100%;
+        height: 100%;
+    }
+
+    .stat-card.working .stat-decoration { color: var(--primary); }
+
+    /* Progress Ring */
+    .progress-ring {
+        position: absolute;
+        top: 18px;
+        right: 18px;
+        width: 55px;
+        height: 55px;
+    }
+
+    .progress-ring svg {
+        width: 100%;
+        height: 100%;
+        transform: rotate(-90deg);
+    }
+
+    .ring-bg {
+        fill: none;
+        stroke: var(--gray-200);
+        stroke-width: 3.5;
+    }
+
+    .ring-progress {
+        fill: none;
+        stroke: var(--success);
+        stroke-width: 3.5;
+        stroke-linecap: round;
+        transition: stroke-dasharray 0.8s ease;
+    }
+
+    .ring-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--success);
+    }
+
+    /* ==========================================
+       RECORDS SECTION
+       ========================================== */
+    .records-section {
+        background: white;
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-lg);
+        overflow: hidden;
+    }
+
+    .records-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--gray-100);
+        background: var(--gray-50);
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .header-left h2 {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--gray-800);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .header-left h2 i {
+        color: var(--primary);
+    }
+
+    .record-count {
+        background: var(--primary);
+        color: white;
+        padding: 5px 14px;
+        border-radius: 50px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .header-right {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+    }
+
+    .view-toggle {
+        display: flex;
+        background: white;
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius);
+        overflow: hidden;
+    }
+
+    .view-toggle button {
+        padding: 10px 16px;
+        border: none;
+        background: transparent;
+        color: var(--gray-500);
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 16px;
+    }
+
+    .view-toggle button:hover {
+        color: var(--gray-700);
+        background: var(--gray-50);
+    }
+
+    .view-toggle button.active {
+        background: var(--primary);
+        color: white;
+    }
+
+    .legend {
+        display: flex;
+        gap: 16px;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--gray-600);
+    }
+
+    .legend-item .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+    }
+
+    .legend-item.present .dot { background: var(--success); }
+    .legend-item.absent .dot { background: var(--danger); }
+    .legend-item.late .dot { background: var(--warning); }
+    .legend-item.leave .dot { background: var(--info); }
+
+    .records-body {
+        min-height: 400px;
+    }
+
+    /* Loading State */
+    .loading-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 80px;
+    }
+
+    .loader {
+        margin-bottom: 20px;
+    }
+
+    .loader-ring {
+        display: inline-block;
+        position: relative;
+        width: 64px;
+        height: 64px;
+    }
+
+    .loader-ring div {
+        box-sizing: border-box;
+        display: block;
+        position: absolute;
+        width: 52px;
+        height: 52px;
+        margin: 6px;
+        border: 5px solid var(--primary);
+        border-radius: 50%;
+        animation: loader-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        border-color: var(--primary) transparent transparent transparent;
+    }
+
+    .loader-ring div:nth-child(1) { animation-delay: -0.45s; }
+    .loader-ring div:nth-child(2) { animation-delay: -0.3s; }
+    .loader-ring div:nth-child(3) { animation-delay: -0.15s; }
+
+    @@keyframes loader-ring {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .loading-state p {
+        color: var(--gray-500);
+        font-size: 14px;
+    }
+
+    /* Empty State */
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 80px 40px;
+        text-align: center;
+    }
+
+    .empty-icon {
+        width: 100px;
+        height: 100px;
+        background: var(--gray-100);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 24px;
+    }
+
+    .empty-icon i {
+        font-size: 44px;
+        color: var(--gray-400);
+    }
+
+    .empty-state h3 {
+        font-size: 22px;
+        color: var(--gray-800);
+        margin: 0 0 10px;
+    }
+
+    .empty-state p {
+        color: var(--gray-500);
+        margin: 0 0 24px;
+        font-size: 15px;
+    }
+
+    .btn-secondary {
+        display: flex;
+        align-items: center;
+        padding: 12px 24px;
+        background: var(--gray-100);
+        border: none;
+        border-radius: var(--radius);
+        color: var(--gray-700);
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-secondary:hover {
+        background: var(--gray-200);
+    }
+
+    /* ==========================================
+       ATTENDANCE TABLE
+       ========================================== */
+    .table-wrapper {
+        overflow-x: auto;
+    }
+
+    .attendance-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .attendance-table thead {
+        background: var(--gray-50);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .attendance-table th {
+        padding: 16px 14px;
+        text-align: left;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--gray-500);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid var(--gray-200);
+        white-space: nowrap;
+    }
+
+    .attendance-table th i {
+        font-size: 12px;
+        margin-right: 4px;
+    }
+
+    .attendance-table td {
+        padding: 16px 14px;
+        font-size: 14px;
+        color: var(--gray-700);
+        border-bottom: 1px solid var(--gray-100);
+        vertical-align: middle;
+    }
+
+    .attendance-table tbody tr {
+        transition: background 0.15s;
+    }
+
+    .attendance-table tbody tr:hover {
+        background: rgba(99, 102, 241, 0.04);
+    }
+
+    .attendance-table tbody tr.weekend-row {
+        background: rgba(99, 102, 241, 0.02);
+    }
+
+    .attendance-table tbody tr.absent-row {
+        background: rgba(239, 68, 68, 0.04);
+    }
+
+    .attendance-table tbody tr.absent-row:hover {
+        background: rgba(239, 68, 68, 0.08);
+    }
+
+    .attendance-table tbody tr.weekoff-row {
+        background: rgba(107, 114, 128, 0.04);
+    }
+
+    .attendance-table tbody tr.leave-row {
+        background: rgba(245, 158, 11, 0.04);
+    }
+
+    .attendance-table tbody tr.holiday-row {
+        background: rgba(59, 130, 246, 0.04);
+    }
+
+    /* Date Cell */
+    .date-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 50px;
+    }
+
+    .date-num {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--gray-800);
+        line-height: 1;
+    }
+
+    .date-month {
+        font-size: 11px;
+        color: var(--gray-500);
+        text-transform: uppercase;
+        margin-top: 2px;
+    }
+
+    .day-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        background: var(--gray-100);
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--gray-600);
+    }
+
+    .day-badge.sunday {
+        background: var(--danger-light);
+        color: var(--danger);
+    }
+
+    /* Shift Badge */
+    .shift-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: var(--gray-100);
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        color: var(--gray-700);
+    }
+
+    .shift-badge i {
+        color: var(--gray-400);
+        font-size: 12px;
+    }
+
+    .no-data {
+        color: var(--gray-400);
+        font-size: 13px;
+    }
+
+    /* Time Cells */
+    .time-cell {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: 'Monaco', 'Consolas', monospace;
+        font-size: 13px;
+    }
+
+    .time-cell .time-value {
+        color: var(--gray-800);
+    }
+
+    .time-cell.ontime .time-value {
+        color: var(--success);
+    }
+
+    .time-cell.late .time-value {
+        color: var(--danger);
+        font-weight: 600;
+    }
+
+    .time-cell.early .time-value {
+        color: var(--warning);
+    }
+
+    .time-cell .indicator {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--danger-light);
+        color: var(--danger);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+    }
+
+    .time-cell .indicator.warning {
+        background: var(--warning-light);
+        color: var(--warning);
+    }
+
+    /* Duration */
+    .duration-badge {
+        font-weight: 700;
+        color: var(--gray-800);
+    }
+
+    /* Variance Badges */
+    .variance-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 10px;
+        border-radius: var(--radius-sm);
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .variance-badge.late {
+        background: var(--danger-light);
+        color: var(--danger);
+    }
+
+    .variance-badge.early {
+        background: var(--warning-light);
+        color: var(--warning);
+    }
+
+    .variance-badge.overtime {
+        background: var(--success-light);
+        color: var(--success-dark);
+    }
+
+    /* Status Cell */
+    .status-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 6px 14px;
+        border-radius: 50px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .status-badge.present {
+        background: var(--success-light);
+        color: var(--success-dark);
+    }
+
+    .status-badge.absent {
+        background: var(--danger-light);
+        color: var(--danger);
+    }
+
+    .status-badge.weekoff {
+        background: var(--gray-200);
+        color: var(--gray-600);
+    }
+
+    .status-badge.holiday {
+        background: var(--info-light);
+        color: var(--info);
+    }
+
+    .status-badge.leave {
+        background: var(--warning-light);
+        color: var(--warning-dark);
+    }
+
+    .status-badge.halfday {
+        background: var(--purple-light);
+        color: var(--purple);
+    }
+
+    .missed-alert {
+        color: var(--warning);
+        font-size: 16px;
+        animation: blink 1.5s ease-in-out infinite;
+    }
+
+    @@keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+    }
+
+    /* Punches Cell */
+    .punches-cell code {
+        font-size: 11px;
+        background: var(--gray-100);
+        padding: 5px 10px;
+        border-radius: var(--radius-sm);
+        color: var(--gray-600);
+    }
+
+    /* Action Button */
+    .btn-view {
+        width: 38px;
+        height: 38px;
+        border: 1px solid var(--gray-200);
+        background: white;
+        border-radius: var(--radius);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--gray-500);
+        font-size: 16px;
+        transition: all 0.2s;
+    }
+
+    .btn-view:hover {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+        transform: scale(1.08);
+    }
+
+    /* Table Footer */
+    .table-footer {
+        padding: 18px 24px;
+        background: var(--gray-50);
+        border-top: 1px solid var(--gray-100);
+    }
+
+    .footer-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+    }
+
+    .summary-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--gray-600);
+    }
+
+    .summary-item .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
+
+    .summary-item .dot.present { background: var(--success); }
+    .summary-item .dot.absent { background: var(--danger); }
+    .summary-item .dot.late { background: var(--warning); }
+    .summary-item .dot.leave { background: var(--info); }
+    .summary-item .dot.overtime { background: var(--purple); }
+
+    .summary-item strong {
+        color: var(--gray-800);
+    }
+
+    /* ==========================================
+       CALENDAR VIEW
+       ========================================== */
+    .calendar-view {
+        padding: 24px;
+    }
+
+    .calendar-weekdays {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 6px;
+        margin-bottom: 10px;
+    }
+
+    .calendar-weekdays span {
+        text-align: center;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--gray-500);
+        text-transform: uppercase;
+        padding: 10px;
+    }
+
+    .calendar-weekdays span.weekend {
+        color: var(--danger);
+    }
+
+    .calendar-days {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 6px;
+    }
+
+    .calendar-day {
+        aspect-ratio: 1;
+        background: var(--gray-50);
+        border-radius: var(--radius);
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+        border: 2px solid transparent;
+    }
+
+    .calendar-day:hover:not(.empty) {
+        transform: scale(1.05);
+        box-shadow: var(--shadow-md);
+        z-index: 1;
+    }
+
+    .calendar-day.empty {
+        background: transparent;
+        cursor: default;
+    }
+
+    .calendar-day.today {
+        border-color: var(--primary);
+    }
+
+    .calendar-day.present {
+        background: var(--success-light);
+        border-left: 4px solid var(--success);
+    }
+
+    .calendar-day.absent {
+        background: var(--danger-light);
+        border-left: 4px solid var(--danger);
+    }
+
+    .calendar-day.weekoff {
+        background: var(--gray-200);
+    }
+
+    .calendar-day.leave {
+        background: var(--warning-light);
+        border-left: 4px solid var(--warning);
+    }
+
+    .calendar-day.holiday {
+        background: var(--info-light);
+        border-left: 4px solid var(--info);
+    }
+
+    .calendar-day .day-number {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--gray-800);
+    }
+
+    .calendar-day .day-status {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--gray-600);
+        margin-top: 4px;
+    }
+
+    .calendar-day .day-time {
+        font-size: 9px;
+        color: var(--gray-500);
+        font-family: monospace;
+        margin-top: 4px;
+    }
+
+    /* ==========================================
+       MODAL
+       ========================================== */
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 20px;
+        animation: fadeIn 0.2s ease;
+    }
+
+    @@keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .modal-dialog {
+        background: white;
+        border-radius: var(--radius-xl);
+        max-width: 720px;
+        width: 100%;
+        max-height: 90vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: var(--shadow-xl);
+        animation: slideUp 0.3s ease;
+    }
+
+    @@keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px) scale(0.97);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 24px;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
+        color: white;
+    }
+
+    .modal-title {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .title-icon {
+        width: 52px;
+        height: 52px;
+        background: rgba(255,255,255,0.2);
+        border-radius: var(--radius);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 26px;
+    }
+
+    .title-text h3 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 600;
+    }
+
+    .title-text p {
+        margin: 4px 0 0;
+        opacity: 0.85;
+        font-size: 14px;
+    }
+
+    .modal-close {
+        width: 44px;
+        height: 44px;
+        background: rgba(255,255,255,0.15);
+        border: none;
+        border-radius: 50%;
+        color: white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        transition: all 0.2s;
+    }
+
+    .modal-close:hover {
+        background: rgba(255,255,255,0.25);
+        transform: rotate(90deg);
+    }
+
+    .modal-body {
+        padding: 24px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    /* Info Cards */
+    .info-cards {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin-bottom: 24px;
+    }
+
+    .info-card {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px;
+        background: var(--gray-50);
+        border-radius: var(--radius);
+    }
+
+    .info-card .icon {
+        font-size: 28px;
+        color: var(--primary);
+    }
+
+    .info-card .status-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 18px;
+    }
+
+    .info-card .status-icon.present { background: var(--success); }
+    .info-card .status-icon
+    /* Continuing from .info-card .status-icon */
+            /* Continuing from .info-card .status-icon */
+            .info-card .status-icon.absent {
+                background: var(--danger);
+            }
+
+            .info-card .status-icon.weekoff {
+                background: var(--gray-500);
+            }
+
+            .info-card .status-icon.leave {
+                background: var(--warning);
+            }
+
+            .info-card .status-icon.holiday {
+                background: var(--info);
+            }
+
+    .info-content {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .info-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: var(--gray-500);
+        letter-spacing: 0.5px;
+    }
+
+    .info-value {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--gray-800);
+    }
+
+        .info-value.highlight {
+            color: var(--primary);
+        }
+
+    .info-sub {
+        font-size: 11px;
+        color: var(--gray-500);
+        margin-top: 2px;
+    }
+
+    /* Time Display */
+    .time-display {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        padding: 28px;
+        background: linear-gradient(135deg, var(--gray-50) 0%, white 100%);
+        border-radius: var(--radius-lg);
+        margin-bottom: 24px;
+    }
+
+    .time-block {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 20px 28px;
+        background: white;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        min-width: 200px;
+    }
+
+        .time-block .block-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .time-block.checkin .block-icon {
+            background: var(--success-light);
+            color: var(--success);
+        }
+
+        .time-block.checkout .block-icon {
+            background: var(--danger-light);
+            color: var(--danger);
+        }
+
+    .block-content {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .block-label {
+        font-size: 12px;
+        color: var(--gray-500);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .block-time {
+        font-size: 26px;
+        font-weight: 700;
+        color: var(--gray-800);
+    }
+
+    .block-variance {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        margin-top: 4px;
+    }
+
+        .block-variance.late {
+            color: var(--danger);
+        }
+
+        .block-variance.early {
+            color: var(--warning);
+        }
+
+    .time-connector {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .connector-line {
+        width: 2px;
+        height: 24px;
+        background: var(--gray-300);
+    }
+
+    .connector-text {
+        background: var(--primary);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 50px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    /* Section Block */
+    .section-block {
+        margin-bottom: 24px;
+    }
+
+        .section-block h4 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--gray-800);
+            margin: 0 0 14px;
+        }
+
+            .section-block h4 i {
+                color: var(--primary);
+            }
+
+    .code-block {
+        background: var(--gray-100);
+        padding: 14px 18px;
+        border-radius: var(--radius);
+        font-family: 'Monaco', 'Consolas', monospace;
+        font-size: 13px;
+        color: var(--gray-700);
+        overflow-x: auto;
+        border-left: 4px solid var(--primary);
+    }
+
+    /* Inline Loading */
+    .inline-loading {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 20px;
+        color: var(--gray-600);
+    }
+
+    .mini-spinner {
+        width: 22px;
+        height: 22px;
+        border: 3px solid var(--gray-200);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    /* Punch Timeline */
+    .punch-timeline {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .timeline-item {
+        display: flex;
+        gap: 18px;
+    }
+
+    .timeline-marker {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .marker-num {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--gray-200);
+        color: var(--gray-600);
+        font-size: 13px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .timeline-item.in .marker-num {
+        background: var(--success-light);
+        color: var(--success-dark);
+    }
+
+    .timeline-item.out .marker-num {
+        background: var(--danger-light);
+        color: var(--danger);
+    }
+
+    .timeline-content {
+        flex: 1;
+        background: var(--gray-50);
+        border-radius: var(--radius);
+        padding: 14px 18px;
+        border-left: 3px solid var(--gray-300);
+    }
+
+    .timeline-item.in .timeline-content {
+        border-left-color: var(--success);
+    }
+
+    .timeline-item.out .timeline-content {
+        border-left-color: var(--danger);
+    }
+
+    .timeline-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .punch-time {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--gray-800);
+    }
+
+    .direction-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 12px;
+        border-radius: var(--radius-sm);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+        .direction-tag.in {
+            background: var(--success-light);
+            color: var(--success-dark);
+        }
+
+        .direction-tag.out {
+            background: var(--danger-light);
+            color: var(--danger);
+        }
+
+    .timeline-details {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+        .timeline-details .detail {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--gray-600);
+        }
+
+            .timeline-details .detail i {
+                color: var(--gray-400);
+            }
+
+            .timeline-details .detail.temp {
+                color: var(--success);
+            }
+
+                .timeline-details .detail.temp.high {
+                    color: var(--danger);
+                    font-weight: 600;
+                }
+
+            .timeline-details .detail.location {
+                color: var(--gray-500);
+            }
+
+    /* No Data Message */
+    .no-data-msg {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 24px;
+        background: var(--warning-light);
+        border-radius: var(--radius);
+        color: var(--warning-dark);
+        font-size: 14px;
+    }
+
+        .no-data-msg i {
+            font-size: 20px;
+        }
+
+    /* Modal Footer */
+    .modal-footer {
+        padding: 18px 24px;
+        border-top: 1px solid var(--gray-100);
+        display: flex;
+        justify-content: flex-end;
+        background: var(--gray-50);
+    }
+
+    .btn-close-modal {
+        display: flex;
+        align-items: center;
+        padding: 12px 28px;
+        background: var(--gray-200);
+        border: none;
+        border-radius: var(--radius);
+        color: var(--gray-700);
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .btn-close-modal:hover {
+            background: var(--gray-300);
+        }
+
+    /* ==========================================
+           RESPONSIVE DESIGN
+           ========================================== */
+    @@media (max-width: 1200px) {
+        .profile-content
+
+    {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .profile-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .info-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .time-display {
+        flex-direction: column;
+    }
+
+    .time-connector {
+        flex-direction: row;
+    }
+
+    .connector-line {
+        width: 40px;
+        height: 2px;
+    }
+
+    }
+
+    @@media (max-width: 768px) {
+        .employee-attendance-page
+
+    {
+        padding: 16px;
+    }
+
+    .profile-main {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .profile-info h1 {
+        font-size: 24px;
+    }
+
+    .profile-meta {
+        justify-content: center;
+    }
+
+    .profile-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .month-selector {
+        width: 100%;
+    }
+
+    .month-dropdown select {
+        width: 100%;
+    }
+
+    .action-buttons {
+        justify-content: center;
+    }
+
+    .records-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .header-right {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .legend {
+        display: none;
+    }
+
+    .attendance-table th,
+    .attendance-table td {
+        padding: 12px 10px;
+        font-size: 12px;
+    }
+
+    .date-num {
+        font-size: 18px;
+    }
+
+    .time-block {
+        min-width: auto;
+        padding: 16px;
+    }
+
+    .block-time {
+        font-size: 20px;
+    }
+
+    .modal-dialog {
+        max-height: 95vh;
+        margin: 10px;
+    }
+
+    .modal-header {
+        padding: 18px;
+    }
+
+    .title-icon {
+        width: 44px;
+        height: 44px;
+        font-size: 22px;
+    }
+
+    .title-text h3 {
+        font-size: 18px;
+    }
+
+    .modal-body {
+        padding: 18px;
+    }
+
+    .footer-summary {
+        gap: 14px;
+    }
+
+    }
+
+    @@media (max-width: 480px) {
+        .analytics-grid
+
+    {
+        grid-template-columns: 1fr;
+    }
+
+    .stat-card {
+        padding: 18px;
+    }
+
+    .stat-value {
+        font-size: 28px;
+    }
+
+    .calendar-days {
+        gap: 4px;
+    }
+
+    .calendar-day {
+        padding: 6px;
+    }
+
+        .calendar-day .day-number {
+            font-size: 14px;
+        }
+
+        .calendar-day .day-status,
+        .calendar-day .day-time {
+            display: none;
+        }
+
+    .time-display {
+        padding: 16px;
+    }
+
+    .time-block {
+        flex-direction: column;
+        text-align: center;
+        width: 100%;
+    }
+
+    .punch-timeline {
+        gap: 10px;
+    }
+
+    .timeline-item {
+        gap: 12px;
+    }
+
+    .timeline-content {
+        padding: 12px;
+    }
+
+    .punch-time {
+        font-size: 16px;
+    }
+
+    .timeline-details {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    }
+
+    /* ==========================================
+           PRINT STYLES
+           ========================================== */
+    @@media print {
+        .employee-attendance-page
+
+    {
+        padding: 0;
+        background: white;
+    }
+
+    .breadcrumb-nav,
+    .profile-actions,
+    .view-toggle,
+    .btn-view,
+    .legend {
+        display: none !important;
+    }
+
+    .profile-hero {
+        box-shadow: none;
+        border: 1px solid var(--gray-200);
+    }
+
+    .profile-background {
+        background: var(--gray-100) !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .records-section {
+        box-shadow: none;
+        border: 1px solid var(--gray-200);
+    }
+
+    .stat-card {
+        box-shadow: none;
+        border: 1px solid var(--gray-200);
+    }
+
+    .attendance-table {
+        font-size: 11px;
+    }
+
+        .attendance-table th,
+        .attendance-table td {
+            padding: 8px 6px;
+        }
+
+    }
+
+    /* ==========================================
+           UTILITY ANIMATIONS
+           ========================================== */
+    .fade-in {
+        animation: fadeIn 0.3s ease;
+    }
+
+    .slide-up {
+        animation: slideUp 0.3s ease;
+    }
+
+    .bounce {
+        animation: bounce 0.5s ease;
+    }
+
+    @@keyframes bounce {
+        0%, 100%
+
+    {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+
+    }
+
+    /* Tooltip Styles */
+    [title] {
+        position: relative;
+    }
+
+    /* Focus States for Accessibility */
+    button:focus-visible,
+    select:focus-visible,
+    a:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+    }
+
+    /* Scrollbar Styling */
+    .modal-body::-webkit-scrollbar,
+    .table-wrapper::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    .modal-body::-webkit-scrollbar-track,
+    .table-wrapper::-webkit-scrollbar-track {
+        background: var(--gray-100);
+        border-radius: 4px;
+    }
+
+    .modal-body::-webkit-scrollbar-thumb,
+    .table-wrapper::-webkit-scrollbar-thumb {
+        background: var(--gray-300);
+        border-radius: 4px;
+    }
+
+        .modal-body::-webkit-scrollbar-thumb:hover,
+        .table-wrapper::-webkit-scrollbar-thumb:hover {
+            background: var(--gray-400);
+        }
+</style>
+
+@* ============================================
+   C# CODE SECTION
+   ============================================ *@
+
+@code {
+    // ==========================================
+    // PARAMETERS
+    // ==========================================
+    [Parameter]
+    public int EmployeeId { get; set; }
+
+    // ==========================================
+    // STATE VARIABLES
+    // ==========================================
+    private Employee? employee;
+    private List<DailyAttendanceRecord> attendanceRecords = new();
+    private EmployeeMonthlyAttendanceSummary? monthlySummary;
+    private List<AttendanceMonthInfo> availableMonths = new();
+    private List<PunchDetail> punchDetails = new();
+
+    // Selected month tracking
+    private string selectedMonthKey = $"{DateTime.Now.Month}_{DateTime.Now.Year}";
+    private int selectedMonth => int.Parse(selectedMonthKey.Split('_')[0]);
+    private int selectedYear => int.Parse(selectedMonthKey.Split('_')[1]);
+
+    // UI State
+    private bool isLoading = true;
+    private bool isExporting = false;
+    private bool isLoadingPunches = false;
+    private bool showPunchModal = false;
+    private string viewMode = "table"; // "table" or "calendar"
+    private DailyAttendanceRecord? selectedRecord;
+
+    // ==========================================
+    // LIFECYCLE METHODS
+    // ==========================================
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEmployee();
+        await LoadAvailableMonths();
+        await LoadAttendance();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reload if employee ID changes
+        if (employee != null && employee.EmployeeId != EmployeeId)
+        {
+            await LoadEmployee();
+            await LoadAvailableMonths();
+            await LoadAttendance();
+        }
+    }
+
+    public void Dispose()
+    {
+        // Cleanup if needed
+    }
+
+    // ==========================================
+    // DATA LOADING METHODS
+    // ==========================================
+    private async Task LoadEmployee()
+    {
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            // Try to get employee by ID
+            var employees = await EmployeeRepository.GetAllAsync(1, 1000);
+            employee = employees.FirstOrDefault(e => e.EmployeeId == EmployeeId);
+
+            if (employee == null)
+            {
+                Logger.LogWarning("Employee with ID {EmployeeId} not found", EmployeeId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading employee {EmployeeId}", EmployeeId);
+        }
+    }
+
+    private async Task LoadAvailableMonths()
+    {
+        try
+        {
+            availableMonths = (await AttendanceRepository.GetAvailableAttendanceMonthsAsync(EmployeeId)).ToList();
+
+            if (availableMonths.Any())
+            {
+                var firstMonth = availableMonths.First();
+                selectedMonthKey = $"{firstMonth.AttMonth}_{firstMonth.AttYear}";
+            }
+            else
+            {
+                // Default to current month if no data exists
+                selectedMonthKey = $"{DateTime.Now.Month}_{DateTime.Now.Year}";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading available months for employee {EmployeeId}", EmployeeId);
+        }
+    }
+
+    private async Task LoadAttendance()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Load attendance records
+            attendanceRecords = (await AttendanceRepository.GetEmployeeMonthlyAttendanceAsync(
+                EmployeeId, selectedMonth, selectedYear)).ToList();
+
+            // Load summary
+            monthlySummary = await AttendanceRepository.GetEmployeeMonthlyAttendanceSummaryAsync(
+                EmployeeId, selectedMonth, selectedYear);
+
+            Logger.LogInformation(
+                "Loaded {Count} attendance records for employee {EmployeeId}, {Month}/{Year}",
+                attendanceRecords.Count, EmployeeId, selectedMonth, selectedYear);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading attendance for employee {EmployeeId}", EmployeeId);
+            attendanceRecords = new();
+            monthlySummary = null;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadAttendance();
+    }
+
+    // ==========================================
+    // EVENT HANDLERS
+    // ==========================================
+    private async Task OnMonthChanged()
+    {
+        await LoadAttendance();
+    }
+
+    private void SelectPreviousMonth()
+    {
+        if (availableMonths.Count > 1)
+        {
+            var currentIndex = availableMonths.FindIndex(m =>
+                $"{m.AttMonth}_{m.AttYear}" == selectedMonthKey);
+
+            if (currentIndex < availableMonths.Count - 1)
+            {
+                var previousMonth = availableMonths[currentIndex + 1];
+                selectedMonthKey = $"{previousMonth.AttMonth}_{previousMonth.AttYear}";
+                _ = LoadAttendance();
+            }
+        }
+    }
+
+    private async Task ShowPunchDetails(DailyAttendanceRecord record)
+    {
+        selectedRecord = record;
+        showPunchModal = true;
+        isLoadingPunches = true;
+        punchDetails = new();
+        StateHasChanged();
+
+        try
+        {
+            punchDetails = (await AttendanceRepository.GetEmployeePunchDetailsByMonthAsync(
+                EmployeeId, selectedMonth, selectedYear, record.AttendanceDate)).ToList();
+
+            Logger.LogInformation(
+                "Loaded {Count} punch details for employee {EmployeeId} on {Date}",
+                punchDetails.Count, EmployeeId, record.AttendanceDate);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading punch details");
+            punchDetails = new();
+        }
+        finally
+        {
+            isLoadingPunches = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClosePunchModal()
+    {
+        showPunchModal = false;
+        selectedRecord = null;
+        punchDetails = new();
+    }
+
+    // ==========================================
+    // EXPORT & PRINT METHODS
+    // ==========================================
+    private async Task ExportToExcel()
+    {
+        if (!attendanceRecords.Any()) return;
+
+        isExporting = true;
+        StateHasChanged();
+
+        try
+        {
+            var employeeName = employee?.EmployeeName ?? "Employee";
+            var monthYear = GetSelectedMonthName();
+
+            var excelBytes = ExcelService.ExportAttendanceToExcel(
+                attendanceRecords, employeeName, monthYear);
+
+            var fileName = $"Attendance_{employeeName.Replace(" ", "_")}_{monthYear.Replace(" ", "_")}.xlsx";
+
+            await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, excelBytes);
+
+            Logger.LogInformation("Exported attendance for {Employee} - {Month}", employeeName, monthYear);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error exporting attendance to Excel");
+            // You could show a toast notification here
+        }
+        finally
+        {
+            isExporting = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task PrintReport()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("window.print");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error printing report");
+        }
+    }
+
+    // ==========================================
+    // NAVIGATION
+    // ==========================================
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/attendance");
+    }
+
+    // ==========================================
+    // HELPER METHODS - Display Formatting
+    // ==========================================
+    private string GetSelectedMonthName()
+    {
+        var match = availableMonths.FirstOrDefault(m =>
+            m.AttMonth == selectedMonth && m.AttYear == selectedYear);
+
+        if (match != null)
+        {
+            return $"{match.MonthName} {match.AttYear}";
+        }
+
+        return new DateTime(selectedYear, selectedMonth, 1).ToString("MMMM yyyy");
+    }
+
+    private string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length >= 2)
+        {
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+        }
+
+        return name.Length >= 2
+            ? name[..2].ToUpper()
+            : name.ToUpper();
+    }
+
+    private string TruncateText(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return "—";
+
+        return text.Length <= maxLength
+            ? text
+            : text[..(maxLength - 3)] + "...";
+    }
+
+    // ==========================================
+    // HELPER METHODS - CSS Classes
+    // ==========================================
+    private string GetAvatarColorClass()
+    {
+        if (monthlySummary == null) return "";
+
+        // Color based on attendance percentage
+        if (monthlySummary.PresentPercentage >= 90) return "present-avatar";
+        if (monthlySummary.PresentPercentage < 70) return "absent-avatar";
+
+        return "";
+    }
+
+    private string GetRowClass(DailyAttendanceRecord record)
+    {
+        if (record.Absent > 0) return "absent-row";
+        if (record.WeeklyOff == 1) return "weekoff-row";
+        if (record.Holiday == 1) return "holiday-row";
+        if (record.IsOnLeave == 1) return "leave-row";
+        return "";
+    }
+
+    private string GetStatusClass(string? statusCode)
+    {
+        return statusCode?.ToUpper() switch
+        {
+            "P" => "present",
+            "A" => "absent",
+            "WO" => "weekoff",
+            "H" => "holiday",
+            "L" => "leave",
+            "HD" => "halfday",
+            "MP" => "absent",
+            _ => "weekoff"
+        };
+    }
+
+    private string GetStatusIcon(string? statusCode)
+    {
+        return statusCode?.ToUpper() switch
+        {
+            "P" => "✓",
+            "A" => "✗",
+            "WO" => "○",
+            "H" => "★",
+            "L" => "◐",
+            "HD" => "½",
+            "MP" => "⚠",
+            _ => "•"
+        };
+    }
+
+    private string GetCalendarDayClass(DailyAttendanceRecord? record, DateTime date)
+    {
+        if (record == null) return "no-record";
+
+        if (record.Absent > 0) return "absent";
+        if (record.WeeklyOff == 1) return "weekoff";
+        if (record.Holiday == 1) return "holiday";
+        if (record.IsOnLeave == 1) return "leave";
+        if (!string.IsNullOrEmpty(record.InTime)) return "present";
+
+        return "no-record";
+    }
+
+    // ==========================================
+    // HELPER METHODS - Status Badge Classes
+    // ==========================================
+    private string GetStatusBadgeClass(string? statusCode)
+    {
+        return statusCode?.ToUpper() switch
+        {
+            "P" => "bg-success",
+            "A" => "bg-danger",
+            "WO" => "bg-secondary",
+            "H" => "bg-info",
+            "L" => "bg-warning text-dark",
+            "HD" => "bg-warning text-dark",
+            "MP" => "bg-dark",
+            _ => "bg-secondary"
+        };
+    }
+
+    // ==========================================
+    // COMPUTED PROPERTIES
+    // ==========================================
+    private bool HasAttendanceData => attendanceRecords.Any();
+
+    private double AttendancePercentage => monthlySummary?.PresentPercentage ?? 0;
+
+    private bool IsCurrentMonth =>
+        selectedMonth == DateTime.Now.Month &&
+        selectedYear == DateTime.Now.Year;
+}

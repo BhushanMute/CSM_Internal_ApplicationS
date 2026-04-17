@@ -1,0 +1,846 @@
+﻿@page "/employee/add"
+@using Microsoft.AspNetCore.Authorization
+@using CSMTutorial.Data.Repositories
+@using CSMTutorial.Models
+@using System.ComponentModel.DataAnnotations
+
+@attribute [Authorize]
+
+@inject IEmployeeRepository EmployeeRepository
+@inject NavigationManager Navigation
+@inject ILogger<AddEmployee> Logger
+
+<PageTitle>Add Employee</PageTitle>
+
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/employees">Employees</a></li>
+                    <li class="breadcrumb-item active">Add New</li>
+                </ol>
+            </nav>
+            <h1 class="h3">
+                <i class="bi bi-person-plus me-2"></i>Add New Employee
+            </h1>
+            <p class="text-muted">Fill in the details to create a new employee record</p>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-outline-secondary" @onclick="GoBack">
+                <i class="bi bi-arrow-left me-1"></i>Back to List
+            </button>
+        </div>
+    </div>
+
+    @if (successMessage != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show">
+            <i class="bi bi-check-circle me-2"></i>
+            @successMessage
+            <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+        </div>
+    }
+
+    @if (errorMessage != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            @errorMessage
+            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+        </div>
+    }
+
+    <div class="row">
+        <div class="col-lg-8">
+            <EditForm Model="employee" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="alert alert-warning" />
+
+                <!-- Basic Information Card -->
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="bi bi-person-badge me-2"></i>Basic Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <!-- Employee Code -->
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    Employee Code <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-upc"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.EmployeeCode"
+                                               placeholder="e.g., EMP001" />
+                                </div>
+                                <ValidationMessage For="@(() => employee.EmployeeCode)" class="text-danger small" />
+                                @if (codeExists)
+                                {
+                                    <small class="text-danger">
+                                        <i class="bi bi-exclamation-circle me-1"></i>
+                                        This employee code already exists
+                                    </small>
+                                }
+                            </div>
+
+                            <!-- Employee Name -->
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    Employee Name <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-person"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.EmployeeName"
+                                               placeholder="Enter full name" />
+                                </div>
+                                <ValidationMessage For="@(() => employee.EmployeeName)" class="text-danger small" />
+                            </div>
+
+                            <!-- Gender -->
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    Gender <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-gender-ambiguous"></i>
+                                    </span>
+                                    <InputSelect class="form-select" @bind-Value="employee.Gender">
+                                        <option value="">Select Gender</option>
+                                        <option value="Male">Male</option>
+                                        <option value="Female">Female</option>
+                                    </InputSelect>
+                                </div>
+                                <ValidationMessage For="@(() => employee.Gender)" class="text-danger small" />
+                            </div>
+
+                            <!-- Date of Birth -->
+                            <div class="col-md-6">
+                                <label class="form-label">Date of Birth</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-calendar-heart"></i>
+                                    </span>
+                                    <InputDate class="form-control" @bind-Value="employee.DOB" />
+                                </div>
+                            </div>
+
+                            <!-- Marital Status -->
+                            <div class="col-md-6">
+                                <label class="form-label">Marital Status</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-heart"></i>
+                                    </span>
+                                    <InputSelect class="form-select" @bind-Value="employee.MaritalStatus">
+                                        <option value="">Select Status</option>
+                                        <option value="Single">Single</option>
+                                        <option value="Married">Married</option>
+                                        <option value="Divorced">Divorced</option>
+                                        <option value="Widowed">Widowed</option>
+                                    </InputSelect>
+                                </div>
+                            </div>
+
+                            <!-- Blood Group -->
+                            <div class="col-md-6">
+                                <label class="form-label">Blood Group</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-droplet"></i>
+                                    </span>
+                                    <InputSelect class="form-select" @bind-Value="employee.BloodGroup">
+                                        <option value="">Select Blood Group</option>
+                                        <option value="A+">A+</option>
+                                        <option value="A-">A-</option>
+                                        <option value="B+">B+</option>
+                                        <option value="B-">B-</option>
+                                        <option value="AB+">AB+</option>
+                                        <option value="AB-">AB-</option>
+                                        <option value="O+">O+</option>
+                                        <option value="O-">O-</option>
+                                    </InputSelect>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Employment Information Card -->
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="bi bi-briefcase me-2"></i>Employment Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <!-- Designation -->
+                            <div class="col-md-6">
+                                <label class="form-label">Designation</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-briefcase"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.Designation"
+                                               placeholder="e.g., Software Engineer" />
+                                </div>
+                            </div>
+
+                            <!-- Department -->
+                            <div class="col-md-6">
+                                <label class="form-label">Department</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-building"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.Department"
+                                               placeholder="e.g., IT, HR, Finance" />
+                                </div>
+                            </div>
+
+                            <!-- Sub Department -->
+                            <div class="col-md-6">
+                                <label class="form-label">Sub Department</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-diagram-3"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.SubDepartment"
+                                               placeholder="e.g., Development, Support" />
+                                </div>
+                            </div>
+
+                            <!-- Location -->
+                            <div class="col-md-6">
+                                <label class="form-label">Location</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-geo-alt"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.Location"
+                                               placeholder="e.g., New York, Mumbai" />
+                                </div>
+                            </div>
+
+                            <!-- Date of Joining -->
+                            <div class="col-md-6">
+                                <label class="form-label">Date of Joining</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-calendar-event"></i>
+                                    </span>
+                                    <InputDate class="form-control" @bind-Value="employee.DOJ" />
+                                </div>
+                            </div>
+
+                            <!-- Status -->
+                            <div class="col-md-6">
+                                <label class="form-label">Status</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-toggle-on"></i>
+                                    </span>
+                                    <InputSelect class="form-select" @bind-Value="employee.Status">
+                                        <option value="Active">Active</option>
+                                        <option value="Inactive">Inactive</option>
+                                    </InputSelect>
+                                </div>
+                            </div>
+
+                            <!-- Employment Type -->
+                            <div class="col-md-6">
+                                <label class="form-label">Employment Type</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-person-badge"></i>
+                                    </span>
+                                    <InputSelect class="form-select" @bind-Value="employee.EmployementType">
+                                        <option value="">Select Type</option>
+                                        <option value="Permanent">Permanent</option>
+                                        <option value="Contract">Contract</option>
+                                        <option value="Temporary">Temporary</option>
+                                        <option value="Intern">Intern</option>
+                                    </InputSelect>
+                                </div>
+                            </div>
+
+                            <!-- Grade -->
+                            <div class="col-md-6">
+                                <label class="form-label">Grade</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-award"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.Grade"
+                                               placeholder="e.g., A, B, C" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contact Information Card -->
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="bi bi-telephone me-2"></i>Contact Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <!-- Email -->
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    Email <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-envelope"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.Email"
+                                               type="email" placeholder="email@example.com" />
+                                </div>
+                                <ValidationMessage For="@(() => employee.Email)" class="text-danger small" />
+                            </div>
+
+                            <!-- Contact No -->
+                            <div class="col-md-6">
+                                <label class="form-label">Contact Number</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-telephone"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.ContactNo"
+                                               placeholder="e.g., +91 9876543210" />
+                                </div>
+                            </div>
+
+                            <!-- Emergency Contact -->
+                            <div class="col-md-6">
+                                <label class="form-label">Emergency Contact</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-telephone-plus"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.EmergencyContact"
+                                               placeholder="Emergency contact number" />
+                                </div>
+                            </div>
+
+                            <!-- Extension No -->
+                            <div class="col-md-6">
+                                <label class="form-label">Extension No</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-hash"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.ExtensionNo"
+                                               placeholder="e.g., 1234" />
+                                </div>
+                            </div>
+
+                            <!-- Residential Address -->
+                            <div class="col-12">
+                                <label class="form-label">Residential Address</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-house"></i>
+                                    </span>
+                                    <InputTextArea class="form-control" @bind-Value="employee.ResidentialAddress"
+                                                   rows="2" placeholder="Enter residential address" />
+                                </div>
+                            </div>
+
+                            <!-- Permanent Address -->
+                            <div class="col-12">
+                                <label class="form-label">Permanent Address</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-geo-alt"></i>
+                                    </span>
+                                    <InputTextArea class="form-control" @bind-Value="employee.PermanentAddress"
+                                                   rows="2" placeholder="Enter permanent address" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Family Information Card -->
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="bi bi-people me-2"></i>Family Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <!-- Father Name -->
+                            <div class="col-md-6">
+                                <label class="form-label">Father's Name</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-person"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.FatherName"
+                                               placeholder="Enter father's name" />
+                                </div>
+                            </div>
+
+                            <!-- Mother Name -->
+                            <div class="col-md-6">
+                                <label class="form-label">Mother's Name</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-person"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.MotherName"
+                                               placeholder="Enter mother's name" />
+                                </div>
+                            </div>
+
+                            <!-- Nominee 1 -->
+                            <div class="col-md-6">
+                                <label class="form-label">Nominee 1</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-person-check"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.Nomenee1"
+                                               placeholder="Enter nominee name" />
+                                </div>
+                            </div>
+
+                            <!-- Nominee 2 -->
+                            <div class="col-md-6">
+                                <label class="form-label">Nominee 2</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-person-check"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.Nomenee2"
+                                               placeholder="Enter nominee name" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Information Card -->
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="bi bi-info-circle me-2"></i>Additional Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <!-- Aadhaar Number -->
+                            <div class="col-md-6">
+                                <label class="form-label">Aadhaar Number</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-credit-card"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.AadhaarNumber"
+                                               placeholder="12 digit Aadhaar number" maxlength="12" />
+                                </div>
+                            </div>
+
+                            <!-- Nationality -->
+                            <div class="col-md-6">
+                                <label class="form-label">Nationality</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-flag"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.Nationality"
+                                               placeholder="e.g., Indian" />
+                                </div>
+                            </div>
+
+                            <!-- Passport Number -->
+                            <div class="col-md-6">
+                                <label class="form-label">Passport Number</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-passport"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.PassportNumber"
+                                               placeholder="Enter passport number" />
+                                </div>
+                            </div>
+
+                            <!-- Overall Experience -->
+                            <div class="col-md-6">
+                                <label class="form-label">Overall Experience</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-clock-history"></i>
+                                    </span>
+                                    <InputText class="form-control" @bind-Value="employee.OverallExperience"
+                                               placeholder="e.g., 5 Years" />
+                                </div>
+                            </div>
+
+                            <!-- Qualifications -->
+                            <div class="col-12">
+                                <label class="form-label">Qualifications</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-mortarboard"></i>
+                                    </span>
+                                    <InputTextArea class="form-control" @bind-Value="employee.Qualifications"
+                                                   rows="2" placeholder="Enter educational qualifications" />
+                                </div>
+                            </div>
+
+                            <!-- Remarks -->
+                            <div class="col-12">
+                                <label class="form-label">Remarks</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-chat-text"></i>
+                                    </span>
+                                    <InputTextArea class="form-control" @bind-Value="employee.Remarks"
+                                                   rows="2" placeholder="Any additional remarks" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4" />
+
+                <!-- Form Actions -->
+                <div class="d-flex justify-content-end gap-2 mb-4">
+                    <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm" disabled="@isSaving">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+                    </button>
+                    <button type="button" class="btn btn-outline-danger" @onclick="GoBack" disabled="@isSaving">
+                        <i class="bi bi-x-circle me-1"></i>Cancel
+                    </button>
+                    <button type="submit" class="btn btn-success" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-circle me-1"></i>
+                            <span>Save Employee</span>
+                        }
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+
+        <!-- Side Panel -->
+        <div class="col-lg-4">
+            <!-- Guidelines Card -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white">
+                    <h6 class="mb-0">
+                        <i class="bi bi-lightbulb me-2 text-warning"></i>Guidelines
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0 small">
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle text-success me-2"></i>
+                            Employee Code must be unique
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle text-success me-2"></i>
+                            Fields marked with <span class="text-danger">*</span> are required
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle text-success me-2"></i>
+                            Email must be in valid format
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle text-success me-2"></i>
+                            Aadhaar must be 12 digits
+                        </li>
+                        <li>
+                            <i class="bi bi-check-circle text-success me-2"></i>
+                            Status defaults to "Active"
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Quick Actions Card -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white">
+                    <h6 class="mb-0">
+                        <i class="bi bi-lightning me-2 text-primary"></i>Quick Actions
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="/employees" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-list-ul me-2"></i>View All Employees
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preview Card -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white">
+                    <h6 class="mb-0">
+                        <i class="bi bi-eye me-2 text-info"></i>Preview
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="avatar bg-primary bg-opacity-10 rounded-circle me-3"
+                             style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;">
+                            <span class="text-primary h5 mb-0">
+                                @GetInitials(employee.EmployeeName)
+                            </span>
+                        </div>
+                        <div>
+                            <h6 class="mb-0">
+                                @(string.IsNullOrWhiteSpace(employee.EmployeeName) ? "Employee Name" : employee.EmployeeName)
+                            </h6>
+                            <small class="text-muted">
+                                @(string.IsNullOrWhiteSpace(employee.EmployeeCode) ? "EMP-CODE" : employee.EmployeeCode)
+                            </small>
+                        </div>
+                    </div>
+                    <ul class="list-unstyled small mb-0">
+                        <li class="d-flex justify-content-between py-1 border-bottom">
+                            <span class="text-muted">Designation:</span>
+                            <span>@(string.IsNullOrWhiteSpace(employee.Designation) ? "-" : employee.Designation)</span>
+                        </li>
+                        <li class="d-flex justify-content-between py-1 border-bottom">
+                            <span class="text-muted">Department:</span>
+                            <span>@(string.IsNullOrWhiteSpace(employee.Department) ? "-" : employee.Department)</span>
+                        </li>
+                        <li class="d-flex justify-content-between py-1 border-bottom">
+                            <span class="text-muted">Gender:</span>
+                            <span>
+                                @if (!string.IsNullOrWhiteSpace(employee.Gender))
+                                {
+                                    <span class="badge @(employee.Gender == "Male" ? "bg-info" : "bg-pink")">
+                                        @employee.Gender
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span>-</span>
+                                }
+                            </span>
+                        </li>
+                        <li class="d-flex justify-content-between py-1 border-bottom">
+                            <span class="text-muted">DOJ:</span>
+                            <span>@(employee.DOJ?.ToString("dd-MMM-yyyy") ?? "-")</span>
+                        </li>
+                        <li class="d-flex justify-content-between py-1">
+                            <span class="text-muted">Status:</span>
+                            <span class="badge @(employee.Status == "Active" ? "bg-success" : "bg-secondary")">
+                                @employee.Status
+                            </span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .bg-pink {
+        background-color: #e83e8c !important;
+        color: white;
+    }
+</style>
+
+@code {
+    private EmployeeCreateModel employee = new();
+    private bool isSaving = false;
+    private bool codeExists = false;
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override void OnInitialized()
+    {
+        ResetForm();
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSaving = true;
+        errorMessage = null;
+        successMessage = null;
+        codeExists = false;
+
+        try
+        {
+            // Check if employee code already exists
+            var exists = await EmployeeRepository.ExistsAsync(employee.EmployeeCode);
+            if (exists)
+            {
+                codeExists = true;
+                errorMessage = "Employee code already exists. Please use a different code.";
+                isSaving = false;
+                return;
+            }
+
+            // Create Employee object from model
+            var newEmployee = employee.ToEmployee();
+
+            var result = await EmployeeRepository.InsertAsync(newEmployee);
+
+            if (result > 0)
+            {
+                successMessage = $"Employee '{employee.EmployeeName}' added successfully!";
+                ResetForm();
+            }
+            else
+            {
+                errorMessage = "Failed to add employee. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error adding employee");
+            errorMessage = "An error occurred while adding the employee. Please try again.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        employee = new EmployeeCreateModel
+        {
+            Status = "Active",
+            DOJ = DateTime.Today,
+            Nationality = "Indian"
+        };
+        codeExists = false;
+        errorMessage = null;
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/employees");
+    }
+
+    private string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+
+        return name.Substring(0, Math.Min(2, name.Length)).ToUpper();
+    }
+
+    // EmployeeCreateModel class for form binding
+    public class EmployeeCreateModel
+    {
+        [Required(ErrorMessage = "Employee Code is required")]
+        [StringLength(50, MinimumLength = 2, ErrorMessage = "Employee Code must be between 2 and 50 characters")]
+        public string EmployeeCode { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Employee Name is required")]
+        [StringLength(100, MinimumLength = 2, ErrorMessage = "Employee Name must be between 2 and 100 characters")]
+        public string EmployeeName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Gender is required")]
+        public string Gender { get; set; } = string.Empty;
+
+        public string? Designation { get; set; }
+
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress(ErrorMessage = "Invalid email format")]
+        public string Email { get; set; } = string.Empty;
+
+        [Phone(ErrorMessage = "Invalid phone number format")]
+        public string? ContactNo { get; set; }
+
+        public DateTime? DOJ { get; set; }
+        public DateTime? DOB { get; set; }
+
+        public string Status { get; set; } = "Active";
+
+        public string? Department { get; set; }
+        public string? SubDepartment { get; set; }
+        public string? Location { get; set; }
+        public string? EmployementType { get; set; }
+        public string? Grade { get; set; }
+
+        public string? FatherName { get; set; }
+        public string? MotherName { get; set; }
+        public string? ResidentialAddress { get; set; }
+        public string? PermanentAddress { get; set; }
+        public string? Nomenee1 { get; set; }
+        public string? Nomenee2 { get; set; }
+        public string? BloodGroup { get; set; }
+        public string? MaritalStatus { get; set; }
+        public string? AadhaarNumber { get; set; }
+        public string? Nationality { get; set; }
+        public string? PassportNumber { get; set; }
+        public string? OverallExperience { get; set; }
+        public string? Qualifications { get; set; }
+        public string? EmergencyContact { get; set; }
+        public string? ExtensionNo { get; set; }
+        public string? Remarks { get; set; }
+
+        // Convert to Employee entity
+        public Employee ToEmployee()
+        {
+            return new Employee
+            {
+                EmployeeCode = EmployeeCode.Trim(),
+                EmployeeName = EmployeeName.Trim(),
+                Gender = Gender,
+                Designation = Designation?.Trim(),
+                Email = Email?.Trim(),
+                ContactNo = ContactNo?.Trim(),
+                DOJ = DOJ,
+                DOB = DOB,
+                Status = Status,
+                Department = Department?.Trim(),
+                SubDepartment = SubDepartment?.Trim(),
+                Location = Location?.Trim(),
+                EmployementType = EmployementType,
+                Grade = Grade?.Trim(),
+                FatherName = FatherName?.Trim(),
+                MotherName = MotherName?.Trim(),
+                ResidentialAddress = ResidentialAddress?.Trim(),
+                PermanentAddress = PermanentAddress?.Trim(),
+                Nomenee1 = Nomenee1?.Trim(),
+                Nomenee2 = Nomenee2?.Trim(),
+                BloodGroup = BloodGroup,
+                MaritalStatus = MaritalStatus,
+                AadhaarNumber = AadhaarNumber?.Trim(),
+                Nationality = Nationality?.Trim(),
+                PassportNumber = PassportNumber?.Trim(),
+                OverallExperience = OverallExperience?.Trim(),
+                Qualifications = Qualifications?.Trim(),
+                EmergencyContact = EmergencyContact?.Trim(),
+                ExtensionNo = ExtensionNo?.Trim(),
+                Remarks = Remarks?.Trim(),
+                RecordStatus = 1
+            };
+        }
+    }
+}
