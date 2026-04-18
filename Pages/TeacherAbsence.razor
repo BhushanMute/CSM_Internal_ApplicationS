@@ -558,7 +558,6 @@
                 </label>
 
                 <div class="message-type-toggle">
-
                     <div class="toggle-option @(messageType == "Today" ? "active" : "")"
                          @onclick='() => SetMessageType("Today")'>
                         <i>📅</i>
@@ -570,14 +569,16 @@
                         <i>📆</i>
                         <span>Tomorrow's Class Cancelled</span>
                     </div>
-
                 </div>
             </div>
+
             <div class="row">
                 <!-- Company Selection -->
                 <div class="col-md-6">
                     <div class="form-group">
-                        <label class="form-label">Select Company/Branch <span class="required">*</span></label>
+                        <label class="form-label">
+                            Select Company/Branch <span class="required">*</span>
+                        </label>
                         <select class="form-control" @onchange="OnCompanyChanged" disabled="@isLoading">
                             <option value="">-- Select Company --</option>
                             @foreach (var company in companies)
@@ -594,7 +595,9 @@
                         <label class="form-label">Total Recipients</label>
                         <div class="recipients-info">
                             <div class="recipients-count">@students.Count</div>
-                            <div class="recipients-label">Students will receive this message</div>
+                            <div class="recipients-label">
+                                Students will receive this message
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -602,24 +605,41 @@
 
             <!-- Reason Input -->
             <div class="form-group">
-                <label class="form-label">Reason for Cancellation <span class="required">*</span></label>
-                <input type="text" class="form-control" @bind="reason" @bind:event="oninput"
+                <label class="form-label">
+                    Reason for Cancellation <span class="required">*</span>
+                </label>
+                <input type="text"
+                       class="form-control"
+                       @bind="reason"
+                       @bind:event="oninput"
                        placeholder="e.g., Teacher is unwell, Emergency meeting, etc."
                        maxlength="200" />
-                <small style="color: #999; font-size: 12px;">@reason.Length / 200 characters</small>
+                <small style="color: #999; font-size: 12px;">
+                    @reason.Length / 200 characters
+                </small>
             </div>
 
             <!-- Message Preview -->
+            <!-- ✅ Shows first student name as preview -->
             <div class="row">
                 <div class="col-md-12">
                     <div class="form-group">
-                        <label class="form-label">Message Preview</label>
+                        <label class="form-label">
+                            Message Preview
+                            @if (students.Count > 0)
+                            {
+                                <small style="color: #667eea; font-size: 12px;">
+                                    (Showing preview for: @students[0].StudentName)
+                                </small>
+                            }
+                        </label>
                         <div class="whatsapp-preview">
                             <div class="whatsapp-preview-header">
                                 <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%2325d366'/%3E%3Ctext x='50' y='65' text-anchor='middle' fill='white' font-size='40'%3E🏫%3C/text%3E%3C/svg%3E" alt="School" />
                                 <span>School Notification</span>
                             </div>
                             <div class="whatsapp-bubble">
+                                <!-- ✅ GetFormattedMessage() uses first student name for preview -->
                                 @GetFormattedMessage()
                                 <div class="time">@DateTime.Now.ToString("hh:mm tt")</div>
                             </div>
@@ -631,9 +651,7 @@
             <!-- Schedule Options -->
             <div class="form-group">
                 <label class="form-label">Send Options</label>
-
                 <div class="schedule-options">
-
                     <label class="schedule-option">
                         <input type="radio"
                                name="schedule"
@@ -651,7 +669,6 @@
                                checked="@(scheduleType == "later")" />
                         <span>Schedule for Later</span>
                     </label>
-
                 </div>
             </div>
 
@@ -661,7 +678,6 @@
                     <div class="col-md-6">
                         <div class="form-group">
                             <label class="form-label">Schedule Date</label>
-
                             <input type="date"
                                    class="form-control"
                                    @bind="scheduledDate"
@@ -672,7 +688,6 @@
                     <div class="col-md-6">
                         <div class="form-group">
                             <label class="form-label">Schedule Time</label>
-
                             <input type="time"
                                    class="form-control"
                                    @bind="scheduledTime" />
@@ -686,7 +701,8 @@
                 <button class="btn btn-outline" @onclick="ResetForm" disabled="@isSending">
                     🔄 Reset
                 </button>
-                <button class="btn btn-primary" @onclick="ShowConfirmation"
+                <button class="btn btn-primary"
+                        @onclick="ShowConfirmation"
                         disabled="@(!CanSend || isSending)">
                     👁️ Preview & Confirm
                 </button>
@@ -719,7 +735,9 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h4>✅ Confirm Message Send</h4>
-                <button class="modal-close" @onclick="() => showConfirmModal = false">&times;</button>
+                <button class="modal-close" @onclick="() => showConfirmModal = false">
+                    &times;
+                </button>
             </div>
             <div class="modal-body">
                 <div class="confirm-item">
@@ -742,12 +760,20 @@
                 {
                     <div class="confirm-item">
                         <span class="confirm-label">Scheduled For</span>
-                        <span class="confirm-value">@scheduledDate?.ToString("dd-MMM-yyyy") @scheduledTime</span>
+                        <span class="confirm-value">
+                            @scheduledDate?.ToString("dd-MMM-yyyy") @scheduledTime
+                        </span>
                     </div>
                 }
 
+                <!-- ✅ Modal preview shows first student name -->
                 <div style="margin-top: 20px;">
-                    <label class="form-label">Final Message:</label>
+                    <label class="form-label">
+                        Sample Message Preview:
+                        <small style="color: #667eea; font-size: 12px;">
+                            (Each student will receive their own name)
+                        </small>
+                    </label>
                     <div class="whatsapp-bubble" style="background: #dcf8c6; max-width: 100%;">
                         @GetFormattedMessage()
                     </div>
@@ -801,8 +827,8 @@
 
     // Computed
     private bool CanSend => selectedCompanyId.HasValue &&
-                           !string.IsNullOrWhiteSpace(reason) &&
-                           students.Count > 0;
+                            !string.IsNullOrWhiteSpace(reason) &&
+                            students.Count > 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -831,7 +857,8 @@
         if (int.TryParse(e.Value?.ToString(), out int companyId))
         {
             selectedCompanyId = companyId;
-            selectedCompanyName = companies.FirstOrDefault(c => c.CompanyId == companyId)?.CompanyName ?? "";
+            selectedCompanyName = companies
+                .FirstOrDefault(c => c.CompanyId == companyId)?.CompanyName ?? "";
             await LoadStudents();
         }
         else
@@ -869,7 +896,18 @@
         messageType = type;
     }
 
+    // ✅ For preview only - shows first student name or placeholder
     private string GetFormattedMessage()
+    {
+        var previewName = students.Count > 0
+            ? students[0].StudentName   // ✅ First student name for preview
+            : "Dear Student";           // ✅ Placeholder when no student selected
+
+        return GetPersonalizedMessage(previewName);
+    }
+
+    // ✅ NEW - Generates personalized message with dynamic student name
+    private string GetPersonalizedMessage(string studentName)
     {
         string dayText = messageType == "Today" ? "Today's" : "Tomorrow's";
         string dateText = messageType == "Today"
@@ -879,8 +917,9 @@
         string reasonText = string.IsNullOrWhiteSpace(reason)
             ? "[Reason will appear here]"
             : reason;
-        var StudentName = students.Count > 0 ? students[0].StudentName : " Dear Student";
-        return $@"Dear {StudentName} ,
+
+        // ✅ Each student gets their own name dynamically
+        return $@"Dear {studentName} ,
 
 {dayText} class ({dateText}) is cancelled due to: {reasonText}.
 
@@ -912,47 +951,62 @@ Management";
             var authState = await AuthStateProvider.GetAuthenticationStateAsync();
             var userName = authState.User.Identity?.Name ?? "Admin";
 
-            // Create message record
+            // Create main message record
             var message = new TeacherAbsenceMessage
             {
                 CompanyId = selectedCompanyId,
                 Reason = reason,
-                MessageBody = GetFormattedMessage(),
+                MessageBody = GetFormattedMessage(), // Preview message for header record
                 MessageType = messageType,
                 Status = scheduleType == "later" ? "Scheduled" : "Sending",
                 TotalRecipients = students.Count,
                 CreatedBy = userName,
-
                 ScheduledDate = scheduleType == "later" ? scheduledDate : null,
-
                 ScheduledTime = scheduleType == "later"
-        && scheduledDate.HasValue
-        && scheduledTime.HasValue
-        ? scheduledDate.Value.Date.Add(scheduledTime.Value.ToTimeSpan())
-        : null
+                    && scheduledDate.HasValue
+                    && scheduledTime.HasValue
+                    ? scheduledDate.Value.Date.Add(scheduledTime.Value.ToTimeSpan())
+                    : null
             };
 
             var messageId = await TeacherService.CreateMessageAsync(message);
-            await TeacherService.InsertRecipientsAsync(messageId, students);
+
+            // ✅ Insert recipients with personalized message body for each student
+            var personalizedRecipients = students.Select(s => new Student
+            {
+                EmployeeId = s.EmployeeId,
+                StudentName = s.StudentName,
+                ParentMobile = s.ParentMobile,
+                CompanyId = s.CompanyId,
+                // ✅ Each student gets their own personalized message stored in DB
+                MessageBody = GetPersonalizedMessage(s.StudentName)
+            }).ToList();
+
+            await TeacherService.InsertRecipientsAsync(messageId, personalizedRecipients);
 
             // If scheduled for later, just save and return
             if (scheduleType == "later")
             {
                 showConfirmModal = false;
-                ShowAlert($"Message scheduled successfully for {scheduledDate?.ToString("dd-MMM-yyyy")} at {scheduledTime}", "alert-success");
+                ShowAlert(
+                    $"Message scheduled successfully for " +
+                    $"{scheduledDate?.ToString("dd-MMM-yyyy")} at {scheduledTime}",
+                    "alert-success");
                 ResetForm();
                 return;
             }
 
-            // Send messages now
-            var messageBody = GetFormattedMessage();
-
+            // ✅ Send personalized message to each student individually
             foreach (var student in students)
             {
                 try
                 {
-                    // Generate WhatsApp URL and try to send via API
-                    var response = await WhatsAppService.SendMessageAsync(student.ParentMobile, messageBody);
+                    // ✅ Generate unique personalized message for each student
+                    var personalizedMessage = GetPersonalizedMessage(student.StudentName);
+
+                    var response = await WhatsAppService.SendMessageAsync(
+                        student.ParentMobile,
+                        personalizedMessage); // ✅ Each student gets their own name
 
                     if (response.Success)
                     {
@@ -988,7 +1042,8 @@ Management";
             }
 
             showConfirmModal = false;
-            ShowAlert($"Messages sent! Success: {sentCount}, Failed: {failedCount}",
+            ShowAlert(
+                $"Messages sent! Success: {sentCount}, Failed: {failedCount}",
                 failedCount > 0 ? "alert-info" : "alert-success");
 
             if (failedCount == 0)

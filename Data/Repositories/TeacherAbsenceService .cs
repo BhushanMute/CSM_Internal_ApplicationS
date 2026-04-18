@@ -57,7 +57,7 @@ namespace CSMTutorial.Data.Repositories
         {
             using var connection = new SqlConnection(_connectionString);
 
-            // Convert to JSON
+            // ✅ Include MessageBody in JSON
             var recipientsJson = System.Text.Json.JsonSerializer.Serialize(recipients.Select(r => new
             {
                 r.EmployeeId,
@@ -65,14 +65,14 @@ namespace CSMTutorial.Data.Repositories
                 r.StudentName,
                 r.ParentMobile,
                 r.CompanyId,
-                r.DepartmentId
+                r.DepartmentId,
+                r.MessageBody  // ✅ Added personalized message body
             }));
 
             var sql = "sp_InsertTeacherAbsenceRecipients";
             var parameters = new { MessageId = messageId, Recipients = recipientsJson };
             await connection.ExecuteAsync(sql, parameters, commandType: CommandType.StoredProcedure);
         }
-
         public async Task<List<TeacherAbsenceRecipient>> GetMessageReportAsync(
             long? messageId, DateTime? fromDate, DateTime? toDate,
             int? companyId, string status, int pageNumber, int pageSize)

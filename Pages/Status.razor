@@ -1,0 +1,1047 @@
+﻿@page "/status"
+@using CSMTutorial.Data.Repositories
+
+@inject ITeacherAbsenceService TeacherService
+@inject IWhatsAppService WhatsAppService
+@inject NavigationManager Navigation
+
+<style>
+    .status-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    /* Page Header */
+    .page-header {
+        background: linear-gradient(135deg, #fc4a1a 0%, #f7b733 100%);
+        color: white;
+        padding: 25px 30px;
+        border-radius: 12px;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 15px rgba(252, 74, 26, 0.4);
+    }
+
+        .page-header h2 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .page-header p {
+            margin: 8px 0 0;
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+    /* Back Button */
+    .btn-back {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: 2px solid rgba(255, 255, 255, 0.5);
+        padding: 8px 18px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 15px;
+        transition: all 0.2s;
+    }
+
+        .btn-back:hover {
+            background: rgba(255, 255, 255, 0.35);
+        }
+
+    /* Message Info Card */
+    .info-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        margin-bottom: 24px;
+        overflow: hidden;
+    }
+
+    .info-card-header {
+        background: #f8f9fa;
+        padding: 16px 24px;
+        border-bottom: 1px solid #eee;
+        font-weight: 600;
+        color: #333;
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .info-card-body {
+        padding: 24px;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+    }
+
+    .info-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .info-label {
+        font-size: 12px;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .info-value {
+        font-size: 15px;
+        color: #333;
+        font-weight: 500;
+    }
+
+    /* Reason Box */
+    .reason-box {
+        background: #f8f9fa;
+        border-left: 4px solid #fc4a1a;
+        padding: 14px 18px;
+        border-radius: 0 8px 8px 0;
+        margin-top: 20px;
+        font-size: 14px;
+        color: #555;
+    }
+
+    /* Summary Cards */
+    .summary-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .summary-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .summary-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+    }
+
+        .summary-icon.total {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .summary-icon.sent {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .summary-icon.pending {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .summary-icon.failed {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        }
+
+    .summary-info h3 {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 700;
+        color: #333;
+    }
+
+    .summary-info p {
+        margin: 4px 0 0;
+        font-size: 12px;
+        color: #888;
+    }
+
+    /* Table Card */
+    .table-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+    }
+
+    .table-header {
+        background: #f8f9fa;
+        padding: 16px 24px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+        .table-header h4 {
+            margin: 0;
+            font-size: 15px;
+            color: #333;
+        }
+
+    .table-wrapper {
+        overflow-x: auto;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th {
+        background: #f8f9fa;
+        padding: 13px 16px;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 600;
+        color: #555;
+        border-bottom: 2px solid #e9ecef;
+        white-space: nowrap;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    td {
+        padding: 14px 16px;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 14px;
+        color: #333;
+    }
+
+    tr:hover {
+        background: #f8f9ff;
+    }
+
+    tr:last-child td {
+        border-bottom: none;
+    }
+
+    /* Status Badges */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .status-pending {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .status-sent {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .status-failed {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    /* Type Badge */
+    .type-badge {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .type-today {
+        background: #fff3e0;
+        color: #e65100;
+    }
+
+    .type-tomorrow {
+        background: #e3f2fd;
+        color: #1565c0;
+    }
+
+    /* Action Buttons */
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 12px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .btn-retry {
+        background: #ffc107;
+        color: #000;
+    }
+
+        .btn-retry:hover {
+            background: #e0a800;
+        }
+
+        .btn-retry:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+    .btn-view {
+        background: #17a2b8;
+        color: white;
+    }
+
+        .btn-view:hover {
+            background: #138496;
+        }
+
+    /* Retry All Button */
+    .btn-retry-all {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        color: white;
+        padding: 8px 18px;
+        border: none;
+        border-radius: 8px;
+        font-size: 13px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+        .btn-retry-all:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+    /* Error Message */
+    .error-msg {
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #dc3545;
+        font-size: 12px;
+        cursor: pointer;
+    }
+
+        .error-msg:hover {
+            white-space: normal;
+            overflow: visible;
+        }
+
+    /* Progress Bar */
+    .progress-wrapper {
+        background: #e9ecef;
+        border-radius: 10px;
+        height: 8px;
+        overflow: hidden;
+        margin-top: 10px;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
+        transition: width 0.3s ease;
+        border-radius: 10px;
+    }
+
+    .progress-text {
+        font-size: 12px;
+        color: #666;
+        margin-top: 6px;
+    }
+
+    /* Loading */
+    .loading-overlay {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 60px;
+        flex-direction: column;
+        gap: 16px;
+        color: #888;
+    }
+
+    .loader {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #fc4a1a;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #888;
+    }
+
+    /* Alert */
+    .alert {
+        padding: 14px 18px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+    }
+
+    .alert-success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+
+    .alert-danger {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+
+    .alert-info {
+        background: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+    }
+
+    /* Modal */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        backdrop-filter: blur(3px);
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 480px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-header {
+        padding: 16px 24px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+        .modal-header h4 {
+            margin: 0;
+            font-size: 17px;
+            color: #333;
+        }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 22px;
+        color: #999;
+        cursor: pointer;
+    }
+
+        .modal-close:hover {
+            color: #333;
+        }
+
+    .modal-body {
+        padding: 24px;
+    }
+
+    .modal-footer {
+        padding: 14px 24px;
+        border-top: 1px solid #eee;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .btn-close-modal {
+        background: #e2e8f0;
+        color: #475569;
+        padding: 8px 18px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+        .btn-close-modal:hover {
+            background: #cbd5e1;
+        }
+
+    .whatsapp-bubble {
+        background: #dcf8c6;
+        padding: 14px 18px;
+        border-radius: 0 12px 12px 12px;
+        font-size: 14px;
+        color: #333;
+        white-space: pre-wrap;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        margin-top: 12px;
+    }
+
+    .detail-row {
+        display: flex;
+        margin-bottom: 10px;
+        font-size: 14px;
+    }
+
+    .detail-label {
+        font-weight: 600;
+        color: #555;
+        min-width: 90px;
+    }
+
+    .detail-value {
+        color: #333;
+    }
+
+    /* Responsive */
+    @@media (max-width: 768px) {
+        .info-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .summary-cards {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+</style>
+
+<div class="status-container">
+
+    <!-- Back Button -->
+    <button class="btn-back" @onclick="GoBack">
+        ← Back to History
+    </button>
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <h2>📋 Message Details</h2>
+        <p>View delivery status for Message ID: #@MessageId</p>
+    </div>
+
+    <!-- Alert -->
+    @if (!string.IsNullOrEmpty(alertMessage))
+    {
+        <div class="alert @alertClass">
+            <span>@alertMessage</span>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="loading-overlay">
+            <div class="loader"></div>
+            <span>Loading message details...</span>
+        </div>
+    }
+    else
+    {
+        <!-- Message Info Card -->
+        @if (messageInfo != null)
+        {
+            <div class="info-card">
+                <div class="info-card-header">
+                    📩 Message Information
+                </div>
+                <div class="info-card-body">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Message Type</span>
+                            <span class="info-value">
+                                <span class="type-badge @(messageInfo.MessageType == "Today" ? "type-today" : "type-tomorrow")">
+                                    @messageInfo.MessageType's Class
+                                </span>
+                            </span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Company</span>
+                            <span class="info-value">@messageInfo.CompanyName</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Sent By</span>
+                            <span class="info-value">@messageInfo.CreatedBy</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Date</span>
+                            <span class="info-value">
+                                @(messageInfo.SentDate?.ToString("dd MMM yyyy, hh:mm tt")
+                                                        ?? messageInfo.CreatedDate?.ToString("dd MMM yyyy, hh:mm tt"))
+                    </span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Status</span>
+                    <span class="info-value">@messageInfo.Status</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Total Recipients</span>
+                    <span class="info-value">@messageInfo.TotalRecipients</span>
+                </div>
+            </div>
+
+                    <div class="reason-box">
+                        <strong>Reason:</strong> @messageInfo.Reason
+                    </div>
+
+                    <!-- Progress Bar -->
+            @if (messageInfo.TotalRecipients > 0)
+                    {
+                        var sentPercent = (int)((double)sentCount / messageInfo.TotalRecipients * 100);
+                        <div style="margin-top: 16px;">
+                            <div class="progress-wrapper">
+                                <div class="progress-fill" style="width: @sentPercent%"></div>
+                            </div>
+                            <div class="progress-text">
+                                @sentPercent% delivered (@sentCount of @messageInfo.TotalRecipients)
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="summary-cards">
+            <div class="summary-card">
+                <div class="summary-icon total">📨</div>
+                <div class="summary-info">
+                    <h3>@totalCount</h3>
+                    <p>Total Recipients</p>
+                </div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-icon sent">✅</div>
+                <div class="summary-info">
+                    <h3>@sentCount</h3>
+                    <p>Sent Successfully</p>
+                </div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-icon pending">⏳</div>
+                <div class="summary-info">
+                    <h3>@pendingCount</h3>
+                    <p>Pending</p>
+                </div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-icon failed">❌</div>
+                <div class="summary-info">
+                    <h3>@failedCount</h3>
+                    <p>Failed</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recipients Table -->
+        <div class="table-card">
+            <div class="table-header">
+                <h4>👥 Recipients (@recipients.Count)</h4>
+                @if (failedCount > 0)
+                {
+                    <button class="btn-retry-all"
+                            @onclick="RetryAllFailed"
+                            disabled="@isRetrying">
+                        @if (isRetrying)
+                        {
+                            <span>Retrying...</span>
+                        }
+                        else
+                        {
+                            <span>🔁 Retry All Failed (@failedCount)</span>
+                        }
+                    </button>
+                }
+            </div>
+
+            @if (recipients.Count == 0)
+            {
+                <div class="empty-state">
+                    <div style="font-size: 48px;">📭</div>
+                    <p>No recipients found for this message.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Student Name</th>
+                                <th>Phone Number</th>
+                                <th>Status</th>
+                                <th>Sent Date</th>
+                                <th>Retry Count</th>
+                                <th>Error</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var (recipient, index) in recipients.Select((r, i) => (r, i)))
+                            {
+                                <tr>
+                                    <td>@(index + 1)</td>
+                                    <td><strong>@recipient.StudentName</strong></td>
+                                    <td>@recipient.ParentMobile</td>
+                                    <td>
+                                        <span class="status-badge status-@recipient.Status.ToLower()">
+                                            @if (recipient.Status == "Sent")
+                                            {
+                                                <span>✅</span>
+                                            }
+                                            else if (recipient.Status == "Failed")
+                                            {
+                                                <span>❌</span>
+                                            }
+                                            else
+                                            {
+                                                <span>⏳</span>
+                                            }
+                                            @recipient.Status
+                                        </span>
+                                    </td>
+                                    <td>
+                                        @(recipient.SentDate?.ToString("dd-MMM-yyyy HH:mm") ?? "-")
+                                    </td>
+                                    <td>@recipient.RetryCount</td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(recipient.ErrorMessage))
+                                        {
+                                            <span class="error-msg" title="@recipient.ErrorMessage">
+                                                @recipient.ErrorMessage
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span style="color: #ccc;">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (recipient.Status == "Failed" && recipient.RetryCount < 3)
+                                        {
+                                            <button class="btn-sm btn-retry"
+                                                    @onclick="() => RetryMessage(recipient)"
+                                                    disabled="@isRetrying">
+                                                🔄 Retry
+                                            </button>
+                                        }
+                                        <button class="btn-sm btn-view"
+                                                @onclick="() => ViewMessage(recipient)">
+                                            👁️
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- View Message Modal -->
+@if (showModal && selectedRecipient != null)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-content" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h4>📩 Message Details</h4>
+                <button class="modal-close" @onclick="CloseModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-row">
+                    <span class="detail-label">Student</span>
+                    <span class="detail-value">@selectedRecipient.StudentName</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Phone</span>
+                    <span class="detail-value">@selectedRecipient.ParentMobile</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Status</span>
+                    <span class="detail-value">
+                        <span class="status-badge status-@selectedRecipient.Status.ToLower()">
+                            @selectedRecipient.Status
+                        </span>
+                    </span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Sent Date</span>
+                    <span class="detail-value">
+                        @(selectedRecipient.SentDate?.ToString("dd-MMM-yyyy HH:mm") ?? "-")
+                    </span>
+                </div>
+                @if (!string.IsNullOrEmpty(selectedRecipient.ErrorMessage))
+                {
+                    <div class="detail-row">
+                        <span class="detail-label">Error</span>
+                        <span class="detail-value" style="color: #dc3545;">
+                            @selectedRecipient.ErrorMessage
+                        </span>
+                    </div>
+                }
+                <div style="margin-top: 16px;">
+                    <strong style="font-size: 13px; color: #555;">Message Sent:</strong>
+                    <!-- ✅ Shows personalized message with student's own name -->
+                    <div class="whatsapp-bubble">
+                        @selectedRecipient.MessageBody
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-close-modal" @onclick="CloseModal">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // ✅ Get MessageId from URL query parameter
+    [SupplyParameterFromQuery]
+    public long MessageId { get; set; }
+
+    // Data
+    private TeacherAbsenceMessage messageInfo;
+    private List<TeacherAbsenceRecipient> recipients = new();
+
+    // Summary Counts
+    private int totalCount = 0;
+    private int sentCount = 0;
+    private int pendingCount = 0;
+    private int failedCount = 0;
+
+    // UI State
+    private bool isLoading = false;
+    private bool isRetrying = false;
+    private bool showModal = false;
+    private TeacherAbsenceRecipient selectedRecipient;
+    private string alertMessage = "";
+    private string alertClass = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            // ✅ Load recipients filtered by MessageId
+            recipients = await TeacherService.GetMessageReportAsync(
+                MessageId,   // ✅ Filter by specific MessageId from URL
+                null,
+                null,
+                null,
+                null,
+                1,
+                1000
+            );
+
+            // ✅ Calculate summary counts
+            totalCount = recipients.Count;
+            sentCount = recipients.Count(r => r.Status == "Sent");
+            pendingCount = recipients.Count(r => r.Status == "Pending");
+            failedCount = recipients.Count(r => r.Status == "Failed");
+
+            // ✅ Get message header info from first recipient
+            if (recipients.Count > 0)
+            {
+                messageInfo = new TeacherAbsenceMessage
+                {
+                    MessageId = MessageId,
+                    CompanyName = recipients[0].CompanyName,
+                    MessageType = recipients[0].MessageType,
+                    Reason = recipients[0].Reason,
+                    CreatedBy = recipients[0].CreatedBy,
+                    SentDate = recipients[0].SentDate,
+                    CreatedDate = recipients[0].CreatedDate,
+                    TotalRecipients = totalCount,
+                    Status = recipients.Any(r => r.Status == "Failed")
+                        ? "Partially Sent"
+                        : recipients.All(r => r.Status == "Sent")
+                            ? "Sent"
+                            : "Pending"
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Error loading details: {ex.Message}", "alert-danger");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RetryMessage(TeacherAbsenceRecipient recipient)
+    {
+        try
+        {
+            isRetrying = true;
+            StateHasChanged();
+
+            var response = await WhatsAppService.SendMessageAsync(
+                recipient.ParentMobile,
+                recipient.MessageBody  // ✅ Uses stored personalized message
+            );
+
+            var newStatus = response.Success ? "Sent" : "Failed";
+
+            await TeacherService.UpdateRecipientStatusAsync(
+                recipient.RecipientId,
+                newStatus,
+                response.ErrorMessage
+            );
+
+            ShowAlert(
+                response.Success
+                    ? $"✅ Message resent to {recipient.StudentName}"
+                    : $"❌ Failed to resend to {recipient.StudentName}",
+                response.Success ? "alert-success" : "alert-danger"
+            );
+
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Retry error: {ex.Message}", "alert-danger");
+        }
+        finally
+        {
+            isRetrying = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RetryAllFailed()
+    {
+        try
+        {
+            isRetrying = true;
+            StateHasChanged();
+
+            var failedList = recipients
+                .Where(r => r.Status == "Failed" && r.RetryCount < 3)
+                .ToList();
+
+            int successCount = 0;
+            int failCount = 0;
+
+            foreach (var recipient in failedList)
+            {
+                try
+                {
+                    var response = await WhatsAppService.SendMessageAsync(
+                        recipient.ParentMobile,
+                        recipient.MessageBody  // ✅ Uses stored personalized message
+                    );
+
+                    var newStatus = response.Success ? "Sent" : "Failed";
+
+                    await TeacherService.UpdateRecipientStatusAsync(
+                        recipient.RecipientId,
+                        newStatus,
+                        response.ErrorMessage
+                    );
+
+                    if (response.Success) successCount++;
+                    else failCount++;
+                }
+                catch
+                {
+                    failCount++;
+                }
+
+                // Small delay to prevent API throttling
+                await Task.Delay(500);
+            }
+
+            ShowAlert(
+                $"Retry Complete! Success: {successCount}, Failed: {failCount}",
+                failCount > 0 ? "alert-info" : "alert-success"
+            );
+
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Error retrying messages: {ex.Message}", "alert-danger");
+        }
+        finally
+        {
+            isRetrying = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ViewMessage(TeacherAbsenceRecipient recipient)
+    {
+        selectedRecipient = recipient;
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        selectedRecipient = null;
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/absencehistory");
+    }
+
+    private void ShowAlert(string message, string cssClass)
+    {
+        alertMessage = message;
+        alertClass = cssClass;
+    }
+}

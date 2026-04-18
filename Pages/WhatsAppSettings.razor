@@ -1,204 +1,1863 @@
-﻿@* @page "/whatsappsettings"
-
+﻿@page "/whatsappsettings"
 @using CSMTutorial.Models
-@using CSMTutorial.Services
-@inject IWhatsAppService WhatsAppService
-@inject ISnackbar Snackbar
+@using CSMTutorial.Data.Repositories
+@using WhatsAppSettingsModel = CSMTutorial.Models.WhatsAppSettings
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+@inject IWhatsAppSettingsService SettingsService
+@inject AuthenticationStateProvider AuthStateProvider
 
-    <MudPaper Class="pa-4">
+<style>
+    .settings-container {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
 
-        <MudText Typo="Typo.h5" Class="mb-4">
-            <MudIcon Icon="@Icons.Custom.Brands.WhatsApp" Color="Color.Success" Class="mr-2" />
-            WhatsApp Notification Settings
-        </MudText>
+    /* Page Header */
+    .page-header {
+        background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
+        color: white;
+        padding: 25px 30px;
+        border-radius: 12px;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 15px rgba(37, 211, 102, 0.4);
+    }
 
-        @if (_settings == null)
-        {
-            <MudProgressCircular Indeterminate="true" />
-        }
-        else
-        {
-            <MudGrid>
-
-                <!-- Enable -->
-                <MudItem xs="12">
-                    <MudSwitch @bind-Value="_settings.IsEnabled"
-                               Label="Enable WhatsApp Notifications"
-                               Color="Color.Success" />
-                </MudItem>
-
-                <!-- Provider -->
-                <MudItem xs="12" md="6">
-                    <MudSelect T="string"
-                               @bind-Value="_settings.APIProvider"
-                               Label="API Provider"
-                               Variant="Variant.Outlined">
-
-                        <MudSelectItem T="string" Value="@("Gupshup")">Gupshup</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("Twilio")">Twilio</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("WATI")">WATI</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("Meta")">Meta (Official API)</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("Custom")">Custom API</MudSelectItem>
-
-                    </MudSelect>
-                </MudItem>
-
-                <!-- Sender -->
-                <MudItem xs="12" md="6">
-                    <MudTextField @bind-Value="_settings.SenderNumber"
-                                  Label="WhatsApp Business Number"
-                                  Variant="Variant.Outlined"
-                                  Placeholder="919876543210" />
-                </MudItem>
-
-                <!-- Endpoint -->
-                <MudItem xs="12">
-                    <MudTextField @bind-Value="_settings.APIEndpoint"
-                                  Label="API Endpoint URL"
-                                  Variant="Variant.Outlined" />
-                </MudItem>
-
-                <!-- Keys -->
-                <MudItem xs="12" md="6">
-                    <MudTextField @bind-Value="_settings.APIKey"
-                                  Label="API Key"
-                                  Variant="Variant.Outlined"
-                                  InputType="InputType.Password" />
-                </MudItem>
-
-                <MudItem xs="12" md="6">
-                    <MudTextField @bind-Value="_settings.APISecret"
-                                  Label="API Secret"
-                                  Variant="Variant.Outlined"
-                                  InputType="InputType.Password" />
-                </MudItem>
-
-                <!-- Templates -->
-                <MudItem xs="12">
-                    <MudDivider Class="my-4" />
-                    <MudText Typo="Typo.h6">Message Templates</MudText>
-                </MudItem>
-
-                <MudItem xs="12" md="6">
-                    <MudSwitch @bind-Value="_settings.SendCheckInAlert"
-                               Label="Send Check-IN Alert"
-                               Color="Color.Primary" />
-                </MudItem>
-
-                <MudItem xs="12" md="6">
-                    <MudSwitch @bind-Value="_settings.SendCheckOutAlert"
-                               Label="Send Check-OUT Alert"
-                               Color="Color.Primary" />
-                </MudItem>
-
-                <MudItem xs="12">
-                    <MudTextField @bind-Value="_settings.CheckInMessageFormat"
-                                  Label="Check-IN Message Template"
-                                  Variant="Variant.Outlined"
-                                  Lines="3"
-                                  HelperText="Use: {{StudentName}}, {{Time}}, {{Date}}, {{BranchName}}, {{CourseName}}" />
-                </MudItem>
-
-                <MudItem xs="12">
-                    <MudTextField @bind-Value="_settings.CheckOutMessageFormat"
-                                  Label="Check-OUT Message Template"
-                                  Variant="Variant.Outlined"
-                                  Lines="3"
-                                  HelperText="Use: {{StudentName}}, {{Time}}, {{Date}}, {{BranchName}}, {{CourseName}}" />
-                </MudItem>
-
-                <!-- Test Mode -->
-                <MudItem xs="12">
-                    <MudDivider Class="my-4" />
-                    <MudText Typo="Typo.h6">Test Mode</MudText>
-                </MudItem>
-
-                <MudItem xs="12" md="6">
-                    <MudSwitch @bind-Value="_settings.IsTestMode"
-                               Label="Enable Test Mode"
-                               Color="Color.Warning" />
-                </MudItem>
-
-                <MudItem xs="12" md="6">
-                    <MudTextField @bind-Value="_settings.TestMobileNumber"
-                                  Label="Test Mobile Number"
-                                  Variant="Variant.Outlined"
-                                  Disabled="@(!_settings.IsTestMode)"
-                                  Placeholder="919876543210" />
-                </MudItem>
-
-                <!-- Buttons -->
-                <MudItem xs="12" Class="d-flex gap-2 mt-4">
-                    <MudButton Variant="Variant.Filled"
-                               Color="Color.Primary"
-                               OnClick="SaveSettings"
-                               StartIcon="@Icons.Material.Filled.Save">
-                        Save Settings
-                    </MudButton>
-
-                    <MudButton Variant="Variant.Outlined"
-                               Color="Color.Success"
-                               OnClick="TestConnection"
-                               StartIcon="@Icons.Material.Filled.Send">
-                        Send Test Message
-                    </MudButton>
-                </MudItem>
-
-            </MudGrid>
+        .page-header h2 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
         }
 
-    </MudPaper>
+        .page-header p {
+            margin: 8px 0 0;
+            opacity: 0.9;
+            font-size: 14px;
+        }
 
-</MudContainer>
+    /* Tabs */
+    .tabs {
+        display: flex;
+        gap: 5px;
+        margin-bottom: 24px;
+        background: white;
+        padding: 6px;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        flex-wrap: wrap;
+    }
+
+    .tab-btn {
+        flex: 1;
+        padding: 11px 14px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        color: #666;
+        background: transparent;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+
+        .tab-btn:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
+            color: white;
+            box-shadow: 0 2px 8px rgba(37, 211, 102, 0.4);
+        }
+
+    /* Card */
+    .settings-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        margin-bottom: 20px;
+        overflow: hidden;
+    }
+
+    .card-header {
+        background: #f8f9fa;
+        padding: 16px 24px;
+        border-bottom: 1px solid #eee;
+        font-weight: 600;
+        color: #333;
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .card-body {
+        padding: 24px;
+    }
+
+    /* Form */
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-label {
+        display: block;
+        margin-bottom: 7px;
+        font-weight: 500;
+        color: #444;
+        font-size: 14px;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 11px 16px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: all 0.3s;
+        box-sizing: border-box;
+        font-family: 'Segoe UI', sans-serif;
+    }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #25d366;
+            box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.15);
+        }
+
+    select.form-control {
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+        padding-right: 36px;
+    }
+
+    textarea.form-control {
+        min-height: 130px;
+        resize: vertical;
+    }
+
+    .form-hint {
+        font-size: 12px;
+        color: #999;
+        margin-top: 5px;
+    }
+
+    /* Row Grid */
+    .row {
+        display: flex;
+        flex-wrap: wrap;
+        margin: 0 -10px;
+    }
+
+    .col-6 {
+        flex: 0 0 50%;
+        max-width: 50%;
+        padding: 0 10px;
+    }
+
+    .col-4 {
+        flex: 0 0 33.333%;
+        max-width: 33.333%;
+        padding: 0 10px;
+    }
+
+    .col-12 {
+        flex: 0 0 100%;
+        max-width: 100%;
+        padding: 0 10px;
+    }
+
+    /* Toggle Switch */
+    .toggle-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+    }
+
+    .toggle-switch {
+        position: relative;
+        width: 52px;
+        height: 28px;
+        flex-shrink: 0;
+    }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: #ccc;
+        border-radius: 28px;
+        transition: 0.3s;
+    }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 4px;
+            bottom: 4px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+
+    input:checked + .toggle-slider {
+        background: #25d366;
+    }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+
+    .toggle-label {
+        font-size: 14px;
+        color: #333;
+        font-weight: 500;
+    }
+
+    /* Connection Status */
+    .conn-status {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 18px;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 20px;
+    }
+
+    .conn-connected {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+
+    .conn-disconnected {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+
+    .conn-unknown {
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeeba;
+    }
+
+    .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .dot-green {
+        background: #28a745;
+        animation: pulse 1.5s infinite;
+    }
+
+    .dot-red {
+        background: #dc3545;
+    }
+
+    .dot-yellow {
+        background: #ffc107;
+    }
+
+    @@keyframes pulse {
+        0%, 100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.4;
+        }
+    }
+
+    /* Password Field */
+    .pw-wrapper {
+        position: relative;
+    }
+
+        .pw-wrapper .form-control {
+            padding-right: 46px;
+        }
+
+    .pw-toggle {
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        color: #888;
+        padding: 0;
+    }
+
+    /* Working Days */
+    .days-grid {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+    }
+
+    .day-btn {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        border: 2px solid #e0e0e0;
+        background: white;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #666;
+    }
+
+        .day-btn.active {
+            background: linear-gradient(135deg, #25d366, #128c7e);
+            border-color: #25d366;
+            color: white;
+        }
+
+        .day-btn:hover {
+            border-color: #25d366;
+        }
+
+    /* Template Variables */
+    .var-chips {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+
+    .var-chip {
+        background: #e8f5e9;
+        color: #2e7d32;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid #c8e6c9;
+        transition: all 0.2s;
+    }
+
+        .var-chip:hover {
+            background: #25d366;
+            color: white;
+            border-color: #25d366;
+        }
+
+    /* WhatsApp Preview */
+    .wa-preview {
+        background: #e5ddd5;
+        border-radius: 12px;
+        padding: 16px;
+        margin-top: 14px;
+    }
+
+    .wa-header {
+        background: #075e54;
+        color: white;
+        padding: 10px 14px;
+        border-radius: 8px 8px 0 0;
+        margin: -16px -16px 12px;
+        font-size: 14px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .wa-bubble {
+        background: white;
+        padding: 12px 14px;
+        border-radius: 0 10px 10px 10px;
+        max-width: 85%;
+        font-size: 13px;
+        white-space: pre-wrap;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        word-wrap: break-word;
+        position: relative;
+    }
+
+        .wa-bubble::before {
+            content: '';
+            position: absolute;
+            left: -8px;
+            top: 0;
+            border-width: 0 8px 8px 0;
+            border-style: solid;
+            border-color: transparent white transparent transparent;
+        }
+
+    /* Stats */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 12px;
+        padding: 22px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        text-align: center;
+        border-top: 4px solid transparent;
+    }
+
+    .sc-total {
+        border-top-color: #667eea;
+    }
+
+    .sc-month {
+        border-top-color: #25d366;
+    }
+
+    .sc-success {
+        border-top-color: #11998e;
+    }
+
+    .sc-failed {
+        border-top-color: #eb3349;
+    }
+
+    .stat-number {
+        font-size: 38px;
+        font-weight: 700;
+        color: #333;
+        line-height: 1;
+    }
+
+    .stat-label {
+        font-size: 13px;
+        color: #888;
+        margin-top: 8px;
+    }
+
+    .stat-rate {
+        font-size: 18px;
+        font-weight: 600;
+        margin-top: 6px;
+    }
+
+    .rate-bar {
+        background: #f0f0f0;
+        border-radius: 10px;
+        height: 8px;
+        overflow: hidden;
+        margin-top: 8px;
+    }
+
+    .rate-fill {
+        height: 100%;
+        border-radius: 10px;
+    }
+
+    .fill-success {
+        background: linear-gradient(135deg, #25d366, #128c7e);
+    }
+
+    .fill-failed {
+        background: linear-gradient(135deg, #eb3349, #f45c43);
+    }
+
+    /* Test Result */
+    .test-result {
+        padding: 14px 18px;
+        border-radius: 10px;
+        margin-top: 14px;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .test-ok {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+
+    .test-err {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+
+    /* Buttons */
+    .btn {
+        padding: 11px 22px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+    .btn-save {
+        background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
+        color: white;
+    }
+
+        .btn-save:hover:not(:disabled) {
+            box-shadow: 0 4px 15px rgba(37,211,102,0.4);
+            transform: translateY(-1px);
+        }
+
+    .btn-test {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+        .btn-test:hover:not(:disabled) {
+            box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+        }
+
+    .btn-connect {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        color: white;
+    }
+
+    .btn-secondary {
+        background: #e2e8f0;
+        color: #475569;
+    }
+
+        .btn-secondary:hover {
+            background: #cbd5e1;
+        }
+
+    .action-bar {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        padding-top: 20px;
+        border-top: 1px solid #eee;
+        margin-top: 20px;
+        flex-wrap: wrap;
+    }
+
+    /* Alert */
+    .alert {
+        padding: 14px 18px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+    }
+
+    .alert-success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+
+    .alert-danger {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+
+    /* Spinner */
+    .spinner {
+        width: 18px;
+        height: 18px;
+        border: 3px solid rgba(255,255,255,0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* Loading */
+    .loading-center {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 60px;
+        flex-direction: column;
+        gap: 14px;
+        color: #888;
+    }
+
+    .loader {
+        width: 42px;
+        height: 42px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #25d366;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    /* Section Divider */
+    .section-divider {
+        border: none;
+        border-top: 2px solid #f0f0f0;
+        margin: 20px 0;
+    }
+
+    .section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Summary Table */
+    .summary-table {
+        width: 100%;
+        font-size: 14px;
+        border-collapse: collapse;
+    }
+
+        .summary-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+            .summary-table td:first-child {
+                color: #888;
+                width: 50%;
+            }
+
+            .summary-table td:last-child {
+                font-weight: 500;
+                color: #333;
+            }
+
+    /* Responsive */
+    @@media (max-width: 768px) {
+        .col-6, .col-4 {
+            flex: 0 0 100%;
+            max-width: 100%;
+        }
+
+        .action-bar {
+            flex-direction: column;
+        }
+
+        .tab-btn {
+            font-size: 12px;
+            padding: 9px 8px;
+        }
+    }
+</style>
+
+<div class="settings-container">
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <h2>⚙️ WhatsApp Settings</h2>
+        <p>Configure API, templates, schedule and notification preferences</p>
+    </div>
+
+    <!-- Alert -->
+    @if (!string.IsNullOrEmpty(alertMessage))
+    {
+        <div class="alert @alertClass">
+            <span>@alertMessage</span>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="loading-center">
+            <div class="loader"></div>
+            <span>Loading settings...</span>
+        </div>
+    }
+    else
+    {
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn @(tab == "api" ? "active" : "")"
+                    @onclick='() => tab = "api"'>
+                🔌 API Config
+            </button>
+            <button class="tab-btn @(tab == "alerts" ? "active" : "")"
+                    @onclick='() => tab = "alerts"'>
+                🔔 Alerts
+            </button>
+            <button class="tab-btn @(tab == "template" ? "active" : "")"
+                    @onclick='() => tab = "template"'>
+                📝 Templates
+            </button>
+            <button class="tab-btn @(tab == "schedule" ? "active" : "")"
+                    @onclick='() => tab = "schedule"'>
+                📅 Schedule
+            </button>
+            <button class="tab-btn @(tab == "test" ? "active" : "")"
+                    @onclick='() => tab = "test"'>
+                🧪 Test
+            </button>
+            <button class="tab-btn @(tab == "stats" ? "active" : "")"
+                    @onclick='() => tab = "stats"'>
+                📈 Statistics
+            </button>
+        </div>
+
+        <!-- ========== TAB: API Config ========== -->
+        @if (tab == "api")
+        {
+            <!-- Connection Status Banner -->
+            <div class="conn-status @GetConnClass()">
+                <div class="status-dot @GetDotClass()"></div>
+                <span>@GetConnText()</span>
+                <span style="margin-left:auto; font-size:12px; opacity:0.7;">
+                    Last saved:
+                    @(settings.UpdatedDate?.ToString("dd-MMM-yyyy HH:mm") ?? "Never")
+                </span>
+            </div>
+
+            <div class="settings-card">
+                <div class="card-header">🔌 API Configuration</div>
+                <div class="card-body">
+
+                    <!-- Enable Toggle -->
+                    <div class="form-group">
+                        <div class="toggle-wrapper">
+                            <label class="toggle-switch">
+                                <input type="checkbox" @bind="settings.IsActive" />
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-label">
+                                @(settings.IsActive
+                                                        ? "✅ WhatsApp Notifications Enabled"
+                                                        : "❌ WhatsApp Notifications Disabled")
+                    </span>
+                </div>
+            </div>
+
+                    <hr class="section-divider" />
+
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="form-group">
+                                <label class="form-label">API Provider</label>
+                                <select class="form-control" @bind="settings.ApiProvider">
+                                    <option value="">-- Select Provider --</option>
+                                    <option value="Gupshup">Gupshup</option>
+                                    <option value="Twilio">Twilio</option>
+                                    <option value="WATI">WATI</option>
+                                    <option value="Meta">Meta (Official API)</option>
+                                    <option value="360Dialog">360Dialog</option>
+                                    <option value="MessageBird">MessageBird</option>
+                                    <option value="Custom">Custom API</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    WhatsApp Business Number
+                                </label>
+                                <input type="text"
+                                       class="form-control"
+                                       @bind="settings.FromNumber"
+                                       placeholder="919876543210" />
+                                <div class="form-hint">
+                                    Include country code without +
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">API Endpoint URL</label>
+                        <input type="text"
+                               class="form-control"
+                               @bind="settings.ApiUrl"
+                               placeholder="https://api.provider.com/v1/messages" />
+                    </div>
+
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="form-group">
+                                <label class="form-label">API Key</label>
+                                <div class="pw-wrapper">
+                                    <input type="@(showKey ? "text" : "password")"
+                                           class="form-control"
+                                           @bind="settings.ApiKey"
+                                           placeholder="Enter API Key" />
+                                    <button class="pw-toggle"
+                                            @onclick="() => showKey = !showKey">
+                                        @(showKey ? "🙈" : "👁️")
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="form-group">
+                                <label class="form-label">API Secret</label>
+                                <div class="pw-wrapper">
+                                    <input type="@(showSecret ? "text" : "password")"
+                                           class="form-control"
+                                           @bind="settings.ApiSecret"
+                                           placeholder="Enter API Secret" />
+                                    <button class="pw-toggle"
+                                            @onclick="() => showSecret = !showSecret">
+                                        @(showSecret ? "🙈" : "👁️")
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            Account SID (Twilio / optional)
+                        </label>
+                        <div class="pw-wrapper">
+                            <input type="@(showSid ? "text" : "password")"
+                                   class="form-control"
+                                   @bind="settings.AccountSid"
+                                   placeholder="Enter Account SID if required" />
+                            <button class="pw-toggle"
+                                    @onclick="() => showSid = !showSid">
+                                @(showSid ? "🙈" : "👁️")
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="action-bar">
+                        <button class="btn btn-connect"
+                                @onclick="TestConnection"
+                                disabled="@isTesting">
+                    @if (isTesting)
+                            {
+                                <div class="spinner"></div>
+                                <span>Testing...</span>
+                            }
+                            else
+                            {
+                                <span>🔌 Test Connection</span>
+                            }
+                        </button>
+                        <button class="btn btn-save"
+                                @onclick="SaveSettings"
+                                disabled="@isSaving">
+                            @if (isSaving)
+                            {
+                                <div class="spinner"></div>
+                                <span>Saving...</span>
+                            }
+                            else
+                            {
+                                <span>💾 Save Settings</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- ========== TAB: Alerts ========== -->
+        @if (tab == "alerts")
+        {
+            <!-- Check IN/OUT Alerts -->
+            <div class="settings-card">
+                <div class="card-header">🔔 Check IN / OUT Alerts</div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="form-group">
+                                <div class="toggle-wrapper">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox"
+                                               @bind="settings.SendCheckInAlert" />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <span class="toggle-label">
+                                        Send Check-IN Alert
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="form-group">
+                                <div class="toggle-wrapper">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox"
+                                               @bind="settings.SendCheckOutAlert" />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <span class="toggle-label">
+                                        Send Check-OUT Alert
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Absence Notifications -->
+            <div class="settings-card">
+                <div class="card-header">📢 Absence Notification Settings</div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="form-group">
+                                <div class="toggle-wrapper">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox"
+                                               @bind="settings.EnableNotifications" />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <span class="toggle-label">
+                                        Enable Absence Notifications
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="form-group">
+                                <div class="toggle-wrapper">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox"
+                                               @bind="settings.SendAdminConfirmation" />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <span class="toggle-label">
+                                        Send Admin Confirmation
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Admin WhatsApp Number</label>
+                        <input type="text"
+                               class="form-control"
+                               @bind="settings.AdminWhatsAppNumber"
+                               placeholder="919876543210" />
+                        <div class="form-hint">
+                            Admin receives summary after each bulk send
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Message Sending Settings -->
+            <div class="settings-card">
+                <div class="card-header">⚙️ Message Sending Settings</div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-4">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    Delay Between Messages (ms)
+                                </label>
+                                <input type="number"
+                                       class="form-control"
+                                       @bind="settings.MessageDelay"
+                                       min="100" max="5000" step="100" />
+                                <div class="form-hint">
+                                    Recommended: 500ms
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="form-group">
+                                <label class="form-label">Max Retry Count</label>
+                                <input type="number"
+                                       class="form-control"
+                                       @bind="settings.MaxRetryCount"
+                                       min="1" max="10" />
+                                <div class="form-hint">
+                                    Max retries for failed messages
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    Message Timeout (seconds)
+                                </label>
+                                <input type="number"
+                                       class="form-control"
+                                       @bind="settings.MessageTimeout"
+                                       min="5" max="120" />
+                                <div class="form-hint">
+                                    API request timeout
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Mode -->
+            <div class="settings-card">
+                <div class="card-header">🧪 Test Mode</div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="form-group">
+                                <div class="toggle-wrapper">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox"
+                                               @bind="settings.IsTestMode" />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <span class="toggle-label">
+                                        @(settings.IsTestMode
+                                                                        ? "⚠️ Test Mode ON - Messages go to test number"
+                                                                        : "✅ Live Mode - Messages go to actual numbers")
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="form-group">
+                        <label class="form-label">Test Mobile Number</label>
+                        <input type="text"
+                               class="form-control"
+                               @bind="settings.TestMobileNumber"
+                               disabled="@(!settings.IsTestMode)"
+                               placeholder="919876543210" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+            <div style="display:flex; justify-content:flex-end;">
+                <button class="btn btn-save"
+                        @onclick="SaveSettings"
+                        disabled="@isSaving">
+            @if (isSaving)
+                    {
+                        <div class="spinner"></div>
+                        <span>Saving...</span>
+                    }
+                    else
+                    {
+                        <span>💾 Save Settings</span>
+                    }
+                </button>
+            </div>
+        }
+
+        <!-- ========== TAB: Templates ========== -->
+        @if (tab == "template")
+        {
+            <!-- Check IN Template -->
+            <div class="settings-card">
+                <div class="card-header">✅ Check-IN Message Template</div>
+                <div class="card-body">
+                    <div class="var-chips">
+                        <span style="font-size:13px; color:#666;">Variables:</span>
+                        @foreach (var v in checkVars)
+                        {
+                            <span class="var-chip"
+                                  @onclick="() => AppendVar(ref checkInRef, v)">
+                                @v
+                            </span>
+                        }
+                    </div>
+                    <textarea class="form-control"
+                              @bind="settings.CheckInMessageFormat"
+                              @bind:event="oninput">
+                            </textarea>
+
+                    <label class="form-label" style="margin-top:14px;">Preview:</label>
+                    <div class="wa-preview">
+                        <div class="wa-header">🏫 School Notification</div>
+                        <div class="wa-bubble">@GetCheckInPreview()</div>
+                    </div>
+
+                    <div class="action-bar">
+                        <button class="btn btn-secondary"
+                                @onclick="ResetCheckInTemplate">
+                            🔄 Reset Default
+                        </button>
+                        <button class="btn btn-save" @onclick="SaveSettings"
+                                disabled="@isSaving">
+                            💾 Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Check OUT Template -->
+            <div class="settings-card">
+                <div class="card-header">🚪 Check-OUT Message Template</div>
+                <div class="card-body">
+                    <div class="var-chips">
+                        <span style="font-size:13px; color:#666;">Variables:</span>
+                        @foreach (var v in checkVars)
+                        {
+                            <span class="var-chip"
+                                  @onclick="() => AppendVar(ref checkOutRef, v)">
+                                @v
+                            </span>
+                        }
+                    </div>
+                    <textarea class="form-control"
+                              @bind="settings.CheckOutMessageFormat"
+                              @bind:event="oninput">
+                            </textarea>
+
+                    <label class="form-label" style="margin-top:14px;">Preview:</label>
+                    <div class="wa-preview">
+                        <div class="wa-header">🏫 School Notification</div>
+                        <div class="wa-bubble">@GetCheckOutPreview()</div>
+                    </div>
+
+                    <div class="action-bar">
+                        <button class="btn btn-secondary"
+                                @onclick="ResetCheckOutTemplate">
+                            🔄 Reset Default
+                        </button>
+                        <button class="btn btn-save" @onclick="SaveSettings"
+                                disabled="@isSaving">
+                            💾 Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Today Absence Template -->
+            <div class="settings-card">
+                <div class="card-header">📅 Today's Class Cancelled Template</div>
+                <div class="card-body">
+                    <div class="var-chips">
+                        <span style="font-size:13px; color:#666;">Variables:</span>
+                        @foreach (var v in absenceVars)
+                        {
+                            <span class="var-chip"
+                                  @onclick='() => settings.TodayTemplate += v'>
+                                @v
+                            </span>
+                        }
+                    </div>
+                    <textarea class="form-control"
+                              @bind="settings.TodayTemplate"
+                              @bind:event="oninput">
+                            </textarea>
+
+                    <label class="form-label" style="margin-top:14px;">Preview:</label>
+                    <div class="wa-preview">
+                        <div class="wa-header">🏫 School Notification</div>
+                        <div class="wa-bubble">@GetTodayPreview()</div>
+                    </div>
+
+                    <div class="action-bar">
+                        <button class="btn btn-secondary"
+                                @onclick="ResetTodayTemplate">
+                            🔄 Reset Default
+                        </button>
+                        <button class="btn btn-save" @onclick="SaveSettings"
+                                disabled="@isSaving">
+                            💾 Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tomorrow Absence Template -->
+            <div class="settings-card">
+                <div class="card-header">📆 Tomorrow's Class Cancelled Template</div>
+                <div class="card-body">
+                    <div class="var-chips">
+                        <span style="font-size:13px; color:#666;">Variables:</span>
+                        @foreach (var v in absenceVars)
+                        {
+                            <span class="var-chip"
+                                  @onclick='() => settings.TomorrowTemplate += v'>
+                                @v
+                            </span>
+                        }
+                    </div>
+                    <textarea class="form-control"
+                              @bind="settings.TomorrowTemplate"
+                              @bind:event="oninput">
+                            </textarea>
+
+                    <label class="form-label" style="margin-top:14px;">Preview:</label>
+                    <div class="wa-preview">
+                        <div class="wa-header">🏫 School Notification</div>
+                        <div class="wa-bubble">@GetTomorrowPreview()</div>
+                    </div>
+
+                    <div class="action-bar">
+                        <button class="btn btn-secondary"
+                                @onclick="ResetTomorrowTemplate">
+                            🔄 Reset Default
+                        </button>
+                        <button class="btn btn-save" @onclick="SaveSettings"
+                                disabled="@isSaving">
+                            💾 Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- ========== TAB: Schedule ========== -->
+      @*   @if (tab == "schedule")
+        {
+            <div class="settings-card">
+                <div class="card-header">📅 Working Hours & Days</div>
+                <div class="card-body">
+
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="form-group">
+                                <label class="form-label">Working Hours From</label>
+                                <input type="time"
+                                       class="form-control"
+                                       value="@settings.WorkingHoursFrom.ToString(@"hh\:mm")"
+                                       @onchange="e => settings.WorkingHoursFrom =
+                                       TimeSpan.Parse(e.Value?.ToString() ?? " 08:00")" />
+                                                                   </div>
+                                                               </div>
+                                                               <div class="col-6">
+                                                                   <div class="form-group">
+                                                                       <label class="form-label">Working Hours To</label>
+                                                                       <input type="time"
+                                                                              class="form-control"
+                                                                              value="@settings.WorkingHoursTo.ToString(@"hh\:mm")"
+                                                                              @onchange="e => settings.WorkingHoursTo =
+                                       TimeSpan.Parse(e.Value?.ToString() ?? " 18:00")" />
+                    </div>
+                </div>
+            </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Working Days</label>
+                        <div class="days-grid">
+                            <button class="day-btn @(settings.WorkMon ? "active" : "")"
+                                    @onclick="() => settings.WorkMon = !settings.WorkMon">
+                                Mon
+                            </button>
+                            <button class="day-btn @(settings.WorkTue ? "active" : "")"
+                                    @onclick="() => settings.WorkTue = !settings.WorkTue">
+                                Tue
+                            </button>
+                            <button class="day-btn @(settings.WorkWed ? "active" : "")"
+                                    @onclick="() => settings.WorkWed = !settings.WorkWed">
+                                Wed
+                            </button>
+                            <button class="day-btn @(settings.WorkThu ? "active" : "")"
+                                    @onclick="() => settings.WorkThu = !settings.WorkThu">
+                                Thu
+                            </button>
+                            <button class="day-btn @(settings.WorkFri ? "active" : "")"
+                                    @onclick="() => settings.WorkFri = !settings.WorkFri">
+                                Fri
+                            </button>
+                            <button class="day-btn @(settings.WorkSat ? "active" : "")"
+                                    @onclick="() => settings.WorkSat = !settings.WorkSat">
+                                Sat
+                            </button>
+                            <button class="day-btn @(settings.WorkSun ? "active" : "")"
+                                    @onclick="() => settings.WorkSun = !settings.WorkSun">
+                                Sun
+                            </button>
+                        </div>
+                        <div class="form-hint" style="margin-top:10px;">
+                            Messages will only be sent during working hours on selected days
+                        </div>
+                    </div>
+
+                    <div class="action-bar">
+                        <button class="btn btn-save"
+                                @onclick="SaveSettings"
+                                disabled="@isSaving">
+                    @if (isSaving)
+                            {
+                                <div class="spinner"></div>
+                                <span>Saving...</span>
+                            }
+                            else
+                            {
+                                <span>💾 Save Schedule</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        } *@
+
+        <!-- ========== TAB: Test ========== -->
+        @if (tab == "test")
+        {
+            <div class="settings-card">
+                <div class="card-header">🧪 Send Test Message</div>
+                <div class="card-body">
+
+                    <div class="form-group">
+                        <label class="form-label">Test Phone Number</label>
+                        <input type="text"
+                               class="form-control"
+                               @bind="testPhone"
+                               placeholder="919876543210 (with country code)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Test Message</label>
+                        <textarea class="form-control"
+                                  @bind="testMsg"
+                                  placeholder="Type your test message here...">
+                                </textarea>
+                    </div>
+
+                    <!-- Quick Fill Buttons -->
+                    <div class="section-title">Quick Fill Templates:</div>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;">
+                        <button class="btn btn-secondary"
+                                style="font-size:12px; padding:7px 14px;"
+                                @onclick="FillCheckInTest">
+                            ✅ Check-IN Template
+                        </button>
+                        <button class="btn btn-secondary"
+                                style="font-size:12px; padding:7px 14px;"
+                                @onclick="FillCheckOutTest">
+                            🚪 Check-OUT Template
+                        </button>
+                        <button class="btn btn-secondary"
+                                style="font-size:12px; padding:7px 14px;"
+                                @onclick="FillTodayTest">
+                            📅 Today Absence Template
+                        </button>
+                        <button class="btn btn-secondary"
+                                style="font-size:12px; padding:7px 14px;"
+                                @onclick="FillTomorrowTest">
+                            📆 Tomorrow Absence Template
+                        </button>
+                    </div>
+
+                    <!-- Live Preview -->
+                    @if (!string.IsNullOrWhiteSpace(testMsg))
+                    {
+                        <div class="wa-preview" style="margin-bottom:16px;">
+                            <div class="wa-header">🏫 School Notification</div>
+                            <div class="wa-bubble">@testMsg</div>
+                        </div>
+                    }
+
+                    <!-- Test Result -->
+                    @if (!string.IsNullOrEmpty(testResult))
+                    {
+                        <div class="test-result @(testOk ? "test-ok" : "test-err")">
+                            @(testOk ? "✅" : "❌") @testResult
+                        </div>
+                    }
+
+                    <div class="action-bar">
+                        <button class="btn btn-secondary" @onclick="ClearTest">
+                            🔄 Clear
+                        </button>
+                        <button class="btn btn-test"
+                                @onclick="SendTestMessage"
+                                disabled="@(isSendingTest ||
+                                                                            string.IsNullOrWhiteSpace(testPhone) ||
+                                                                            string.IsNullOrWhiteSpace(testMsg))">
+                    @if (isSendingTest)
+                            {
+                                <div class="spinner"></div>
+                                <span>Sending...</span>
+                            }
+                            else
+                            {
+                                <span>📤 Send Test Message</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- ========== TAB: Statistics ========== -->
+        @if (tab == "stats")
+        {
+            <!-- Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card sc-total">
+                    <div class="stat-number">@stats.TotalSentAllTime</div>
+                    <div class="stat-label">Total Messages (All Time)</div>
+                </div>
+                <div class="stat-card sc-month">
+                    <div class="stat-number">@stats.TotalSentThisMonth</div>
+                    <div class="stat-label">Sent This Month</div>
+                </div>
+                <div class="stat-card sc-success">
+                    <div class="stat-number" style="color:#25d366;">
+                        @stats.TotalSuccess
+                    </div>
+                    <div class="stat-label">Successfully Delivered</div>
+                    <div class="stat-rate" style="color:#25d366;">
+                        @stats.SuccessRate%
+                    </div>
+                    <div class="rate-bar">
+                        <div class="rate-fill fill-success"
+                             style="width:@stats.SuccessRate%">
+                        </div>
+                    </div>
+                </div>
+                <div class="stat-card sc-failed">
+                    <div class="stat-number" style="color:#eb3349;">
+                        @stats.TotalFailed
+                    </div>
+                    <div class="stat-label">Failed Deliveries</div>
+                    <div class="stat-rate" style="color:#eb3349;">
+                        @stats.FailedRate%
+                    </div>
+                    <div class="rate-bar">
+                        <div class="rate-fill fill-failed"
+                             style="width:@stats.FailedRate%">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Config Summary -->
+            <div class="settings-card">
+                <div class="card-header">📋 Current Configuration Summary</div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <table class="summary-table">
+                                <tr>
+                                    <td>API Provider</td>
+                                    <td>@(settings.ApiProvider ?? "-")</td>
+                                </tr>
+                                <tr>
+                                    <td>From Number</td>
+                                    <td>@(settings.FromNumber ?? "-")</td>
+                                </tr>
+                                <tr>
+                                    <td>API Status</td>
+                                    <td>
+                                        @(settings.IsActive
+                                                                        ? "✅ Active"
+                                                                        : "❌ Inactive")
+                                                                                   </td>
+                                                                               </tr>
+                                                                               <tr>
+                                                                                   <td>Notifications</td>
+                                                                                   <td>
+                                        @(settings.EnableNotifications
+                                                                        ? "✅ Enabled"
+                                                                        : "❌ Disabled")
+                                                                                   </td>
+                                                                               </tr>
+                                                                               <tr>
+                                                                                   <td>Test Mode</td>
+                                                                                   <td>
+                                        @(settings.IsTestMode
+                                                                        ? "⚠️ ON"
+                                                                        : "✅ OFF (Live)")
+                                                                                     </td>
+                                                                                 </tr>
+                                                                             </table>
+                                                                         </div>
+                                                                         <div class="col-6">
+                                                                             <table class="summary-table">
+                                                                                 <tr>
+                                                                                     <td>Message Delay</td>
+                                                                                     <td>@settings.MessageDelay ms</td>
+                                                                                 </tr>
+                                                                                 <tr>
+                                                                                     <td>Max Retry</td>
+                                                                                     <td>@settings.MaxRetryCount times</td>
+                                                                                 </tr>
+                                                                                 <tr>
+                                                                                     <td>Working Hours</td>
+                                                                                     <td>
+                                                                                         @settings.WorkingHoursFrom.ToString(@"hh\:mm")
+                                                                                         -
+                                                                                         @settings.WorkingHoursTo.ToString(@"hh\:mm")
+                                                                                     </td>
+                                                                                 </tr>
+                                                                                 <tr>
+                                                                                     <td>Check-IN Alert</td>
+                                                                                     <td>
+                                        @(settings.SendCheckInAlert
+                                                                        ? "✅ ON"
+                                                                        : "❌ OFF")
+                                                                              </td>
+                                                                          </tr>
+                                                                          <tr>
+                                                                              <td>Last Updated</td>
+                                                                              <td>
+                                        @(settings.UpdatedDate?
+                                                                        .ToString("dd-MMM-yyyy HH:mm") ?? "-")
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+            <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+                <button class="btn btn-save" @onclick="LoadStats">
+                    🔄 Refresh Stats
+                </button>
+            </div>
+        }
+    }
+</div>
 
 @code {
+    // Data
+     
+    private CSMTutorial.Models.WhatsAppSettings settings = new();
+    private WhatsAppUsageStats stats = new();
+    // UI State
+    private string tab = "api";
+    private bool isLoading = false;
+    private bool isSaving = false;
+    private bool isTesting = false;
+    private bool isSendingTest = false;
+    private string connectionStatus = "Unknown";
+    private string alertMessage = "";
+    private string alertClass = "";
 
-    private WhatsAppSettings? _settings;
+    // Password Visibility
+    private bool showKey = false;
+    private bool showSecret = false;
+    private bool showSid = false;
+
+    // Test
+    private string testPhone = "";
+    private string testMsg = "";
+    private string testResult = "";
+    private bool testOk = false;
+
+    // Template ref helpers (for append)
+    private string checkInRef = "";
+    private string checkOutRef = "";
+
+    // Variable Lists
+    private List<string> checkVars = new()
+    {
+        "{StudentName}", "{Time}", "{Date}",
+        "{BranchName}", "{CourseName}"
+    };
+
+    private List<string> absenceVars = new()
+    {
+        "{StudentName}", "{Date}", "{Reason}"
+    };
 
     protected override async Task OnInitializedAsync()
     {
-        _settings = await WhatsAppService.GetSettingsAsync();
+        await LoadSettings();
+        await LoadStats();
+    }
 
+    private async Task LoadSettings()
+    {
+        try
+        {
+            isLoading = true;
+            settings = await SettingsService.GetSettingsAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Error loading settings: {ex.Message}", "alert-danger");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadStats()
+    {
+        try
+        {
+            stats = await SettingsService.GetUsageStatsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Stats error: {ex.Message}");
+        }
     }
 
     private async Task SaveSettings()
     {
-        if (_settings == null) return;
-
-        var success = await WhatsAppService.UpdateSettingsAsync(_settings);
-
-        if (success)
-            Snackbar.Add("Settings saved successfully!", Severity.Success);
-        else
-            Snackbar.Add("Failed to save settings", Severity.Error);
+        try
+        {
+            isSaving = true;
+            var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = auth.User.Identity?.Name ?? "Admin";
+            var ok = await SettingsService.SaveSettingsAsync(settings, user);
+            ShowAlert(
+                ok ? "✅ Settings saved successfully!" : "❌ Failed to save settings.",
+                ok ? "alert-success" : "alert-danger"
+            );
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Error: {ex.Message}", "alert-danger");
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
     private async Task TestConnection()
     {
-        if (_settings == null || string.IsNullOrWhiteSpace(_settings.TestMobileNumber))
+        try
         {
-            Snackbar.Add("Please enter test mobile number", Severity.Warning);
-            return;
+            isTesting = true;
+            connectionStatus = "Unknown";
+            var ok = await SettingsService.TestConnectionAsync(
+                settings.ApiUrl, settings.ApiKey);
+            connectionStatus = ok ? "Connected" : "Disconnected";
+            ShowAlert(
+                ok ? "✅ Connection successful!"
+                   : "❌ Connection failed. Check API settings.",
+                ok ? "alert-success" : "alert-danger"
+            );
         }
-
-        var testNotification = new PendingWhatsAppNotification
+        catch (Exception ex)
         {
-            EmployeeId = 0,
-            StudentName = "Test Student",
-            ParentMobileNo = _settings.TestMobileNumber,
-            PunchTime = DateTime.Now,
-            PunchDirection = "in",
-            BranchName = "CSM Tutorial",
-            CourseName = "Test Course"
-        };
-
-        var success = await WhatsAppService.SendWhatsAppMessageAsync(testNotification, "checkin");
-
-        if (success)
-            Snackbar.Add("Test message sent successfully!", Severity.Success);
-        else
-            Snackbar.Add("Failed to send test message", Severity.Error);
+            connectionStatus = "Disconnected";
+            ShowAlert($"Connection error: {ex.Message}", "alert-danger");
+        }
+        finally
+        {
+            isTesting = false;
+        }
     }
-} *@
+
+    private async Task SendTestMessage()
+    {
+        try
+        {
+            isSendingTest = true;
+            testResult = "";
+            var (ok, msg) = await SettingsService.SendTestMessageAsync(
+                testPhone, testMsg);
+            testOk = ok;
+            testResult = msg;
+        }
+        catch (Exception ex)
+        {
+            testOk = false;
+            testResult = ex.Message;
+        }
+        finally
+        {
+            isSendingTest = false;
+        }
+    }
+
+    // ===== Connection Status Helpers =====
+    private string GetConnClass() => connectionStatus switch
+    {
+        "Connected" => "conn-connected",
+        "Disconnected" => "conn-disconnected",
+        _ => "conn-unknown"
+    };
+
+    private string GetDotClass() => connectionStatus switch
+    {
+        "Connected" => "dot-green",
+        "Disconnected" => "dot-red",
+        _ => "dot-yellow"
+    };
+
+    private string GetConnText() => connectionStatus switch
+    {
+        "Connected" => "✅ API Connected & Working",
+        "Disconnected" => "❌ API Not Connected",
+        _ => "⚠️ Connection Status Unknown - Click Test Connection"
+    };
+
+    // ===== Template Previews =====
+    private string GetCheckInPreview()
+    {
+        return (settings.CheckInMessageFormat ?? "No template set.")
+            .Replace("{StudentName}", "Ahmad Ali")
+            .Replace("{Time}", DateTime.Now.ToString("hh:mm tt"))
+            .Replace("{Date}", DateTime.Today.ToString("dd-MMM-yyyy"))
+            .Replace("{BranchName}", "CSM Tutorial")
+            .Replace("{CourseName}", "Mathematics");
+    }
+
+    private string GetCheckOutPreview()
+    {
+        return (settings.CheckOutMessageFormat ?? "No template set.")
+            .Replace("{StudentName}", "Ahmad Ali")
+            .Replace("{Time}", DateTime.Now.ToString("hh:mm tt"))
+            .Replace("{Date}", DateTime.Today.ToString("dd-MMM-yyyy"))
+            .Replace("{BranchName}", "CSM Tutorial")
+            .Replace("{CourseName}", "Mathematics");
+    }
+
+    private string GetTodayPreview()
+    {
+        return (settings.TodayTemplate ?? "No template set.")
+            .Replace("{StudentName}", "Ahmad Ali")
+            .Replace("{Date}", DateTime.Today.ToString("dd-MMM-yyyy"))
+            .Replace("{Reason}", "Teacher is unwell");
+    }
+
+    private string GetTomorrowPreview()
+    {
+        return (settings.TomorrowTemplate ?? "No template set.")
+            .Replace("{StudentName}", "Ahmad Ali")
+            .Replace("{Date}", DateTime.Today.AddDays(1).ToString("dd-MMM-yyyy"))
+            .Replace("{Reason}", "Teacher is unwell");
+    }
+
+    // ===== Variable Append Helper =====
+    private void AppendVar(ref string field, string variable)
+    {
+        field += variable;
+    }
+
+    // ===== Reset Templates =====
+    private void ResetCheckInTemplate()
+    {
+        settings.CheckInMessageFormat =
+@"Dear {StudentName},
+
+Your child has checked IN at {BranchName}.
+Time: {Time}
+Date: {Date}
+Course: {CourseName}
+
+Regards,
+Management";
+    }
+
+    private void ResetCheckOutTemplate()
+    {
+        settings.CheckOutMessageFormat =
+@"Dear {StudentName},
+
+Your child has checked OUT from {BranchName}.
+Time: {Time}
+Date: {Date}
+Course: {CourseName}
+
+Regards,
+Management";
+    }
+
+    private void ResetTodayTemplate()
+    {
+        settings.TodayTemplate =
+@"Dear {StudentName},
+
+Today's class ({Date}) is cancelled due to: {Reason}.
+
+We apologize for the inconvenience.
+
+Regards,
+Management";
+    }
+
+    private void ResetTomorrowTemplate()
+    {
+        settings.TomorrowTemplate =
+@"Dear {StudentName},
+
+Tomorrow's class ({Date}) is cancelled due to: {Reason}.
+
+We apologize for the inconvenience.
+
+Regards,
+Management";
+    }
+
+    // ===== Quick Fill Test =====
+    private void FillCheckInTest()
+    {
+        testMsg = GetCheckInPreview();
+    }
+
+    private void FillCheckOutTest()
+    {
+        testMsg = GetCheckOutPreview();
+    }
+
+    private void FillTodayTest()
+    {
+        testMsg = (settings.TodayTemplate ?? "")
+            .Replace("{StudentName}", "Test Student")
+            .Replace("{Date}", DateTime.Today.ToString("dd-MMM-yyyy"))
+            .Replace("{Reason}", "Test reason");
+    }
+
+    private void FillTomorrowTest()
+    {
+        testMsg = (settings.TomorrowTemplate ?? "")
+            .Replace("{StudentName}", "Test Student")
+            .Replace("{Date}", DateTime.Today.AddDays(1).ToString("dd-MMM-yyyy"))
+            .Replace("{Reason}", "Test reason");
+    }
+
+    private void ClearTest()
+    {
+        testPhone = "";
+        testMsg = "";
+        testResult = "";
+        testOk = false;
+    }
+
+    private void ShowAlert(string message, string cssClass)
+    {
+        alertMessage = message;
+        alertClass = cssClass;
+    }
+}

@@ -11,5 +11,7 @@
         public string Gender { get; set; }
         public string CompanyName { get; set; }
         public string DepartmentName { get; set; }
+        // ✅ Add this property
+        public string MessageBody { get; set; }
     }
 }

@@ -37,6 +37,7 @@ builder.Services.AddSingleton<DapperContext>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 builder.Services.AddScoped<IAttendanceRepository, AttendanceRepository>();
+builder.Services.AddScoped<IWhatsAppSettingsService, WhatsAppSettingsService>();
 
 // ==========================================
 // SERVICES
